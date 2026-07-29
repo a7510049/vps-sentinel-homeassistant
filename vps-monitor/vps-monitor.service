@@ -1,0 +1,25 @@
+[Unit]
+Description=Ubuntu VPS monitor for Home Assistant
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/vps-monitor.env
+ExecStart=/opt/vps-monitor/venv/bin/python /opt/vps-monitor/vps_monitor.py
+Restart=on-failure
+RestartSec=10
+User=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
+
