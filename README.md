@@ -44,6 +44,7 @@ git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && cd vps-s
 - ✅ 安裝 Tailscale、Mosquitto、Docker、Home Assistant 與 VPS Monitor。
 - ✅ 產生兩組不同的 MQTT 高強度密碼。
 - ✅ 將 MQTT 限制在 `127.0.0.1`，不公開至網際網路。
+- ✅ 優先透過 Tailscale Serve 提供 tailnet 私有 HTTPS。
 - ✅ 備份既有 Mosquitto 設定並保留 Home Assistant 資料。
 - ✅ 設定開機自動啟動並逐項檢查服務。
 
@@ -52,6 +53,7 @@ git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && cd vps-s
 管理員並加入 MQTT 整合即可。
 
 > 安裝器不修改 UFW、雲端防火牆或 3X-UI 連接埠。
+> 若 tailnet 尚未啟用 HTTPS，Tailscale 可能會要求你在瀏覽器確認一次。
 
 ## 📊 可以監控什麼
 
@@ -74,6 +76,8 @@ Home Assistant 會自動建立以下資訊：
 - `重新啟動提醒`：Ubuntu 建立 `/var/run/reboot-required` 時顯示問題
 
 告警門檻都能在環境檔中調整，不需要修改程式。
+當安全更新或 Docker 狀態暫時無法讀取時，實體會顯示「未知」，不會
+以 `0` 冒充正常結果。
 
 ## 🔌 接到既有的 Home Assistant
 
@@ -107,6 +111,8 @@ git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && sudo bas
 4. 檢查服務，失敗時直接顯示最近 30 行日誌。
 
 重新執行安裝器時，可以沿用現有設定，或先自動備份再重新設定。
+若 Python 依賴沒有變更，更新時會略過虛擬環境重建，只替換程式並
+重新啟動服務。
 
 安裝時可選擇資源模式：
 
@@ -131,6 +137,22 @@ journalctl -u vps-monitor -f
 ```
 
 成功後，Home Assistant 的 MQTT 整合下會自動出現 VPS 裝置。
+
+## 🔄 安全更新 Home Assistant
+
+一條龍安裝完成後，可使用以下指令檢查並更新 Home Assistant：
+
+```bash
+sudo vps-sentinel-update
+```
+
+更新工具會先驗證 Home Assistant 設定，再比較容器映像。只有發現新版
+時才會建立設定備份並更新。啟動檢查失敗時會自動退回原本映像，備份
+則保留在 `/opt/homeassistant-backups`。為節省磁碟空間，只保留最近
+三份自動備份。
+
+重新執行 `setup.sh` 不會再自動拉取新版 Home Assistant，避免維護監控
+設定時意外升級。
 
 ## 🍎 選配：加入 HomeKit
 
