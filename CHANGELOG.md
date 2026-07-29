@@ -1,5 +1,12 @@
 # 更新紀錄
 
+## 0.2.1
+
+- 新增中文互動式移除工具，可選擇只移除監控器或完整清除專案環境
+- 完整移除預設先建立最終備份，並以指定確認文字避免誤刪
+- 只移除專案專用的 MQTT 帳號、設定、Tailscale Serve 與固定路徑
+- 共用套件採保守偵測與二次確認，保護其他 MQTT、Docker 與 SSH 用途
+
 ## 0.2.0
 
 - Home Assistant 改用 Tailscale Serve 提供 tailnet 私有 HTTPS

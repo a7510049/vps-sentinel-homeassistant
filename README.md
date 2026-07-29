@@ -154,6 +154,32 @@ sudo vps-sentinel-update
 重新執行 `setup.sh` 不會再自動拉取新版 Home Assistant，避免維護監控
 設定時意外升級。
 
+## 🧹 安全移除
+
+一條龍安裝完成後，可使用中文移除工具：
+
+```bash
+sudo vps-sentinel-uninstall
+```
+
+工具提供兩種範圍：
+
+1. 只移除 VPS Monitor，保留 Home Assistant、MQTT 與 Tailscale。
+2. 完整移除本專案建立的 Container、設定、歷史資料、MQTT 專用帳號、
+   Tailscale Serve 規則與管理指令。
+
+完整移除需要輸入指定確認文字，並預設先在 `/root` 建立一份最終備份。
+Mosquitto、Docker 與 Tailscale 都可能被其他服務共用，因此不會直接
+移除：工具只會在確認沒有其他 MQTT 設定或 Docker Container 後，再
+個別詢問是否移除套件。Tailscale 一律保留，避免移除過程切斷目前的
+SSH 連線。
+
+如果尚未更新到包含移除工具的版本，也可在專案目錄執行：
+
+```bash
+sudo bash uninstall.sh
+```
+
 ## 🍎 選配：加入 HomeKit
 
 > [!IMPORTANT]

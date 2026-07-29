@@ -39,6 +39,10 @@ if [[ ! -f "${REPO_DIR}/update.sh" ]]; then
   red "找不到 update.sh，請先重新下載完整專案。"
   exit 1
 fi
+if [[ ! -f "${REPO_DIR}/uninstall.sh" ]]; then
+  red "找不到 uninstall.sh，請先重新下載完整專案。"
+  exit 1
+fi
 
 ask_yes_no() {
   local result_var="$1" question="$2" default_answer="$3" answer hint
@@ -476,6 +480,8 @@ systemctl restart vps-monitor
 green "VPS Monitor 已啟動並設為開機自動執行"
 install -m 0755 "${REPO_DIR}/update.sh" \
   /usr/local/sbin/vps-sentinel-update
+install -m 0755 "${REPO_DIR}/uninstall.sh" \
+  /usr/local/sbin/vps-sentinel-uninstall
 
 blue "步驟 6/6：最後檢查"
 sleep 3
@@ -530,3 +536,4 @@ echo "  TLS：關閉"
 echo
 echo "完成 MQTT 整合後，VPS 裝置會自動出現。"
 echo "日後更新 Home Assistant：sudo vps-sentinel-update"
+echo "日後完整移除：sudo vps-sentinel-uninstall"
