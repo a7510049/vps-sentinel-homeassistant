@@ -16,10 +16,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check shell syntax
-        run: bash -n setup.sh update.sh vps-monitor/install.sh
+        run: bash -n setup.sh update.sh uninstall.sh vps-monitor/install.sh
 
       - name: Run ShellCheck
-        run: shellcheck setup.sh update.sh vps-monitor/install.sh
+        run: shellcheck setup.sh update.sh uninstall.sh vps-monitor/install.sh
 
       - name: Install Python dependencies
         run: python3 -m pip install -r vps-monitor/requirements.txt
