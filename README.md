@@ -1,14 +1,18 @@
 # 🖥️ VPS Sentinel for Home Assistant
 
-> 把 VPS 的健康狀態帶進 Home Assistant
+> 輕量、自架、為小型 VPS 打造的 Home Assistant 主機監控方案
 
-VPS Sentinel 是一套輕量、可自架的 VPS 監控工具。它會透過 MQTT
-Discovery，自動把 CPU、記憶體、磁碟、服務與 Docker 狀態加入
-Home Assistant，讓你用熟悉的儀表板查看主機狀況，並在異常時收到通知。
+VPS Sentinel 會透過 MQTT Discovery，自動將 VPS 的 CPU、記憶體、
+磁碟、服務與 Docker 狀態加入 Home Assistant。你可以在同一個儀表板
+掌握主機狀況，並透過 Home Assistant Companion App 接收異常通知。
 
-整套系統以安全預設值與低資源占用為設計重點，適合免費或小型 VPS。
-HomeKit 整合則保留為選配功能。即使沒有 HomePod 或 Apple TV，也不影響
-Home Assistant 儀表板與 Companion App 推播。
+專案以低資源占用、安全預設值與簡單維護為設計重點，適合免費方案及
+小型 Ubuntu VPS。中文安裝器可協助部署 Home Assistant、Mosquitto、
+Tailscale 與監控服務；安裝後則可透過單一維護中心管理設定、更新、
+儀表板與移除流程。
+
+HomeKit 為選配功能。沒有 HomePod 或 Apple TV 時，Home Assistant
+儀表板與 Companion App 推播仍可正常使用。
 
 ## 🧩 支援環境
 
@@ -32,25 +36,25 @@ Home Assistant 儀表板與 Companion App 推播。
 
 ## 🚀 快速開始
 
-如果要把 Mosquitto、Home Assistant 與 VPS Monitor 全部部署在同一台
-Ubuntu VPS，只要複製並執行這一行：
+若要在同一台 Ubuntu VPS 部署 Mosquitto、Home Assistant 與 VPS
+Sentinel，請執行：
 
 ```bash
 git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && cd vps-sentinel-homeassistant && sudo bash setup.sh
 ```
 
-安裝器會以中文引導，並自動完成：
+安裝器會以中文逐步引導，並自動完成：
 
-- ✅ 安裝 Tailscale、Mosquitto、Docker、Home Assistant 與 VPS Monitor。
+- ✅ 安裝 Tailscale、Mosquitto、Docker、Home Assistant 與 VPS Sentinel。
 - ✅ 產生兩組不同的 MQTT 高強度密碼。
 - ✅ 將 MQTT 限制在 `127.0.0.1`，不公開至網際網路。
 - ✅ 優先透過 Tailscale Serve 提供 tailnet 私有 HTTPS。
 - ✅ 備份既有 Mosquitto 設定並保留 Home Assistant 資料。
 - ✅ 設定開機自動啟動並逐項檢查服務。
 
-過程中只需要選擇「VPS 顯示名稱」與「資源模式」。全新 VPS 需在
-瀏覽器授權一次 Tailscale。安裝完成後，再依畫面提示建立 Home Assistant
-管理員並加入 MQTT 整合即可。
+安裝過程會請你設定 VPS 顯示名稱並選擇資源模式；全新 VPS 另需在
+瀏覽器授權一次 Tailscale。完成後，依畫面提示建立 Home Assistant
+管理員並加入 MQTT 整合即可開始使用。
 
 > 安裝器不修改 UFW、雲端防火牆或 3X-UI 連接埠。
 > 若 tailnet 尚未啟用 HTTPS，Tailscale 可能會要求你在瀏覽器確認一次。
@@ -96,10 +100,10 @@ VPS 必須能主動連到 broker，但不需要把 VPS 的任何連接埠公開�
 
 ## 🛠️ 只安裝 VPS Monitor
 
-如果已經有可用的 Home Assistant 與 MQTT broker，只需要安裝監控程式：
+如果已經有可用的 Home Assistant 與 MQTT broker，可以只安裝監控程式：
 
 ```bash
-git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && sudo bash vps-sentinel-homeassistant/vps-monitor/install.sh
+git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && cd vps-sentinel-homeassistant && sudo bash vps-monitor/install.sh
 ```
 
 安裝器會依序詢問 MQTT 位址、TLS、帳密、VPS 名稱、要監控的 systemd
@@ -138,22 +142,6 @@ journalctl -u vps-monitor -f
 
 成功後，Home Assistant 的 MQTT 整合下會自動出現 VPS 裝置。
 
-## 🔄 安全更新 Home Assistant
-
-一條龍安裝完成後，可使用以下指令檢查並更新 Home Assistant：
-
-```bash
-sudo vps-sentinel-update
-```
-
-更新工具會先驗證 Home Assistant 設定，再比較容器映像。只有發現新版
-時才會建立設定備份並更新。啟動檢查失敗時會自動退回原本映像，備份
-則保留在 `/opt/homeassistant-backups`。為節省磁碟空間，只保留最近
-三份自動備份。
-
-重新執行 `setup.sh` 不會再自動拉取新版 Home Assistant，避免維護監控
-設定時意外升級。
-
 ## 🧰 中文維護中心
 
 安裝完成後，日常管理只需要一個指令：
@@ -162,15 +150,45 @@ sudo vps-sentinel-update
 sudo vps-sentinel
 ```
 
-維護中心可查看服務狀態與目前設定、切換資源模式、調整 CPU／記憶體／
-磁碟告警門檻、建立儀表板、安全更新 VPS Sentinel 與 Home Assistant，
-以及進入移除工具。
+若是從 `v0.2.x` 或更早版本升級，請先在原本的專案目錄執行一次：
+
+```bash
+git pull
+sudo bash setup.sh
+```
+
+這次執行會安裝新的管理指令並沿用既有資料。完成後，未來即可從維護
+中心更新，不必反覆下載或重新安裝整套環境。
+
+維護中心可以：
+
+- 查看服務狀態與目前設定
+- 切換資源模式，調整 CPU、記憶體與磁碟告警門檻
+- 建立或更新 Home Assistant 儀表板
+- 安全更新 VPS Sentinel 與 Home Assistant
+- 開啟完整移除工具
+
 設定變更前會自動備份；若監控服務無法重新啟動，會立即回復原設定。
 
-VPS Sentinel 升級會從 GitHub 最新正式 Release 下載原始碼，確認版本檔、
-必要檔案及 Python／Shell 基本語法後才替換程式。升級前保留舊版本；
-若新服務未能正常啟動，會自動回復。為節省空間，只保留最近三份備份。
-也可以直接執行 `sudo vps-sentinel-upgrade`。
+更新 VPS Sentinel 時，工具只會採用 GitHub 上的最新正式 Release。
+下載完成後會檢查版本、必要檔案與基本語法，確認無誤才替換程式；
+若新版服務無法正常啟動，會自動回復。也可以直接執行：
+
+```bash
+sudo vps-sentinel-upgrade
+```
+
+更新 Home Assistant 時，工具會先驗證設定，再比較 Container 映像。
+只有發現新版時才會備份並更新；啟動檢查失敗時會自動退回原本映像。
+也可以直接執行：
+
+```bash
+sudo vps-sentinel-update
+```
+
+兩種更新都只保留最近三份自動備份，避免長期占用 VPS 磁碟空間。
+重新執行 `setup.sh` 不會自動升級 Home Assistant，避免調整監控設定時
+意外變更正在運行的版本。
 
 「建立或更新儀表板」只使用 Home Assistant 內建卡片，不需要 HACS。
 工具會先備份 `configuration.yaml`，產生獨立的
@@ -180,13 +198,13 @@ VPS Sentinel 升級會從 GitHub 最新正式 Release 下載原始碼，確認�
 
 ## 🧹 安全移除
 
-一條龍安裝完成後，可使用中文移除工具：
+需要停用或重新部署時，請使用中文移除工具：
 
 ```bash
 sudo vps-sentinel-uninstall
 ```
 
-工具提供兩種範圍：
+移除前可以選擇範圍：
 
 1. 只移除 VPS Monitor，保留 Home Assistant、MQTT 與 Tailscale。
 2. 完整移除本專案建立的 Container、設定、歷史資料、MQTT 專用帳號、
@@ -197,12 +215,6 @@ Mosquitto、Docker 與 Tailscale 都可能被其他服務共用，因此不會�
 移除：工具只會在確認沒有其他 MQTT 設定或 Docker Container 後，再
 個別詢問是否移除套件。Tailscale 一律保留，避免移除過程切斷目前的
 SSH 連線。
-
-如果尚未更新到包含移除工具的版本，也可在專案目錄執行：
-
-```bash
-sudo bash uninstall.sh
-```
 
 ## 🍎 選配：加入 HomeKit
 
