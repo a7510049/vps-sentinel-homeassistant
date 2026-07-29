@@ -63,12 +63,12 @@ Home Assistant 數值：
 
 選配的 HomeKit 狀態：
 
-- `VPS 離線`：監控程式停止或 VPS 失聯
-- `VPS 資源過載`：CPU ≥ 90%、RAM ≥ 90%，連續約 5 分鐘
-- `VPS 磁碟不足`：根目錄使用率 ≥ 85%
-- `VPS 服務異常`：指定的 systemd 服務停止，或 Docker 有 unhealthy /
+- `連線狀態`：監控程式停止或 VPS 失聯時顯示問題
+- `系統負載狀態`：CPU ≥ 90%、RAM ≥ 90%，連續約 5 分鐘時顯示問題
+- `磁碟空間狀態`：根目錄使用率 ≥ 85% 時顯示問題
+- `服務運作狀態`：指定的 systemd 服務停止，或 Docker 有 unhealthy /
   restarting 容器
-- `VPS 需要重啟`：Ubuntu 建立 `/var/run/reboot-required`
+- `重新啟動提醒`：Ubuntu 建立 `/var/run/reboot-required` 時顯示問題
 
 所有門檻都能在環境檔調整。
 

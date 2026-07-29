@@ -155,28 +155,28 @@ def config_binary(key, name, device_class="occupancy", available=True):
 def publish_discovery(client):
     sensors = {
         "cpu_percent": config_sensor(
-            "cpu_percent", "CPU", "%", None, "measurement", "mdi:cpu-64-bit"
+            "cpu_percent", "CPU 使用率", "%", None, "measurement", "mdi:cpu-64-bit"
         ),
         "memory_percent": config_sensor(
-            "memory_percent", "記憶體", "%", None, "measurement", "mdi:memory"
+            "memory_percent", "記憶體使用率", "%", None, "measurement", "mdi:memory"
         ),
         "disk_percent": config_sensor(
-            "disk_percent", "根目錄磁碟", "%", None, "measurement", "mdi:harddisk"
+            "disk_percent", "磁碟使用率", "%", None, "measurement", "mdi:harddisk"
         ),
         "load_1": config_sensor("load_1", "負載 1 分鐘", icon="mdi:gauge"),
         "load_5": config_sensor("load_5", "負載 5 分鐘", icon="mdi:gauge"),
         "load_15": config_sensor("load_15", "負載 15 分鐘", icon="mdi:gauge"),
         "uptime_hours": config_sensor(
-            "uptime_hours", "運行時間", "h", "duration", "measurement"
+            "uptime_hours", "已運行", "h", "duration", "measurement"
         ),
         "boot_time": config_sensor(
-            "boot_time", "開機時間", device_class="timestamp"
+            "boot_time", "最近開機時間", device_class="timestamp"
         ),
         "security_updates": config_sensor(
-            "security_updates", "安全更新", icon="mdi:shield-alert"
+            "security_updates", "待安裝安全更新", icon="mdi:shield-alert"
         ),
         "docker_running": config_sensor(
-            "docker_running", "Docker 運行中", icon="mdi:docker"
+            "docker_running", "執行中的容器", icon="mdi:docker"
         ),
         "docker_unhealthy": config_sensor(
             "docker_unhealthy", "Docker 異常", icon="mdi:docker"
@@ -203,11 +203,21 @@ def publish_discovery(client):
                 payload=None, qos=1, retain=True,
             )
     binaries = {
-        "offline": config_binary("offline", "VPS 離線", available=False),
-        "resource_overload": config_binary("resource_overload", "VPS 資源過載"),
-        "disk_low": config_binary("disk_low", "VPS 磁碟不足"),
-        "service_problem": config_binary("service_problem", "VPS 服務異常"),
-        "reboot_required": config_binary("reboot_required", "VPS 需要重啟"),
+        "offline": config_binary(
+            "offline", "連線狀態", device_class="problem", available=False
+        ),
+        "resource_overload": config_binary(
+            "resource_overload", "系統負載狀態", device_class="problem"
+        ),
+        "disk_low": config_binary(
+            "disk_low", "磁碟空間狀態", device_class="problem"
+        ),
+        "service_problem": config_binary(
+            "service_problem", "服務運作狀態", device_class="problem"
+        ),
+        "reboot_required": config_binary(
+            "reboot_required", "重新啟動提醒", device_class="problem"
+        ),
     }
     for key, cfg in sensors.items():
         client.publish(
