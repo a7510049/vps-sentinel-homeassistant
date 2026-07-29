@@ -37,6 +37,9 @@ class MonitorParsingTests(unittest.TestCase):
     def test_os_release_parser_returns_mapping(self):
         self.assertIsInstance(vps_monitor.OS_RELEASE, dict)
 
+    def test_development_version_has_safe_fallback(self):
+        self.assertTrue(vps_monitor.installed_version())
+
     @patch.object(vps_monitor, "run", return_value=None)
     def test_security_updates_returns_unknown_on_command_failure(self, _run):
         self.assertEqual(vps_monitor.security_updates(), "unknown")

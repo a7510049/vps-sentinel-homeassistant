@@ -60,13 +60,23 @@ def os_release():
 
 
 OS_RELEASE = os_release()
+
+
+def installed_version():
+    try:
+        with open("/opt/vps-monitor/.version", encoding="utf-8") as version_file:
+            return version_file.read().strip() or "unknown"
+    except OSError:
+        return "development"
+
+
 DEVICE = {
     "identifiers": [f"ubuntu_vps_{VPS_ID}"],
     "name": NAME,
     # Keep the existing identifier so upgrades do not create a duplicate device.
     "manufacturer": OS_RELEASE.get("NAME", "Linux"),
-    "model": "VPS Sentinel",
-    "sw_version": platform.release(),
+    "model": f"VPS Sentinel／{platform.machine()}",
+    "sw_version": installed_version(),
 }
 
 
@@ -195,6 +205,9 @@ def publish_discovery(client):
         ),
         "boot_time": config_sensor(
             "boot_time", "最近開機時間", device_class="timestamp"
+        ),
+        "last_report": config_sensor(
+            "last_report", "最近回報時間", device_class="timestamp"
         ),
         "security_updates": config_sensor(
             "security_updates", "待安裝安全更新", icon="mdi:shield-alert"
@@ -345,6 +358,7 @@ def main():
                 "load_15": round(load[2], 2),
                 "uptime_hours": round((time.time() - psutil.boot_time()) / 3600, 1),
                 "boot_time": boot,
+                "last_report": datetime.now(timezone.utc).isoformat(),
                 "security_updates": updates,
                 "docker_running": docker["running"],
                 "docker_unhealthy": docker["unhealthy"],

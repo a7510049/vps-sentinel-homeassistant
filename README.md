@@ -67,6 +67,7 @@ Home Assistant 會自動建立以下資訊：
 - 1 / 5 / 15 分鐘系統負載
 - 開機時間與運行時間
 - 網路上傳／下載速率
+- 最近一次資料回報時間
 - 可安裝安全更新數量
 - Docker 運行中與異常容器數，主機已安裝 Docker 時才會顯示
 
@@ -165,6 +166,9 @@ sudo bash setup.sh
 - 查看服務狀態與目前設定
 - 切換資源模式，調整 CPU、記憶體與磁碟告警門檻
 - 建立或更新 Home Assistant 儀表板
+- 安裝 Home Assistant 自動化 Blueprint
+- 執行健康檢查、安全修復與匿名診斷
+- 建立、清理或還原設定備份
 - 安全更新 VPS Sentinel 與 Home Assistant
 - 開啟完整移除工具
 
@@ -195,6 +199,49 @@ sudo vps-sentinel-update
 `vps-sentinel-dashboard.yaml`，通過 Home Assistant 設定檢查後才重新
 啟動。若偵測到既有的 Lovelace YAML 自訂架構，會停止自動修改，避免
 覆蓋使用者設定。
+
+## 🩺 健康檢查與安全修復
+
+健康檢查為按需執行，不會建立新的常駐服務，也不會增加平時的 CPU 或
+記憶體用量：
+
+```bash
+sudo vps-sentinel-doctor
+```
+
+工具會檢查監控程式、MQTT、Docker、Home Assistant、Tailscale、設定檔
+權限及磁碟空間。修復操作一律由使用者選擇，不會自行重設帳密、修改
+防火牆或重新啟動整台 VPS。
+
+需要回報問題時，可以建立匿名診斷報告。報告只包含版本、系統架構與
+檢查結果，不會收集 MQTT 密碼、Token、IP 位址、VPS 名稱或完整日誌。
+
+## 📦 設定備份與還原
+
+從維護中心進入「備份與還原」，或直接執行：
+
+```bash
+sudo vps-sentinel-backup
+```
+
+設定備份包含 Home Assistant 設定、Compose 檔案及 VPS Sentinel 環境
+設定；為控制容量，不包含 Home Assistant 歷史資料庫與日誌。還原前會
+再次備份目前狀態，還原後則會驗證監控服務與 Home Assistant 設定。
+
+手動備份預設保存在 `/opt/vps-sentinel-backups`，可由工具保留指定數量。
+
+## 🤖 Home Assistant 自動化模板
+
+VPS Sentinel 內建三組 Blueprint：
+
+- 系統異常通知：監看負載、磁碟與服務狀態，避免短暫尖峰誤報
+- 主機離線通知：離線時立即通知，並可設定恢復連線通知
+- 每日健康摘要：在指定時間執行自訂摘要通知
+
+從維護中心選擇「Home Assistant 自動化模板」即可安裝。模板只會寫入
+Home Assistant 官方 Blueprint 目錄，不修改 `.storage`、既有自動化或
+通知設定。安裝後請到「設定 → 自動化與場景 → 藍圖」建立自動化，並
+自行選擇 Companion App 或其他通知動作。
 
 ## 🧹 安全移除
 

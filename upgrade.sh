@@ -9,6 +9,9 @@ readonly MANAGE_COMMAND="/usr/local/sbin/vps-sentinel"
 readonly UPDATE_COMMAND="/usr/local/sbin/vps-sentinel-update"
 readonly UNINSTALL_COMMAND="/usr/local/sbin/vps-sentinel-uninstall"
 readonly UPGRADE_COMMAND="/usr/local/sbin/vps-sentinel-upgrade"
+readonly DOCTOR_COMMAND="/usr/local/sbin/vps-sentinel-doctor"
+readonly BACKUP_COMMAND="/usr/local/sbin/vps-sentinel-backup"
+readonly AUTOMATIONS_COMMAND="/usr/local/sbin/vps-sentinel-automations"
 
 green()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 yellow() { printf '\033[1;33m⚠ %s\033[0m\n' "$*"; }
@@ -28,6 +31,16 @@ for command in curl tar python3; do
     exit 1
   fi
 done
+available_kb="$(df -Pk /opt | awk 'NR == 2 {print $4}')"
+if [[ "${available_kb:-0}" -lt 204800 ]]; then
+  red "可用空間低於 200 MiB，為避免升級中斷，請先清理磁碟。"
+  exit 1
+fi
+if [[ ! -f /etc/vps-monitor.env ||
+      ! -x "${INSTALL_DIR}/venv/bin/python" ]]; then
+  red "目前安裝不完整，請先執行 sudo vps-sentinel-doctor。"
+  exit 1
+fi
 
 temporary="$(mktemp -d)"
 cleanup() {
@@ -69,9 +82,13 @@ if [[ -z "${source_dir}" ]]; then
   red "下載內容不完整，已取消升級。"
   exit 1
 fi
-for file in VERSION manage.sh update.sh uninstall.sh upgrade.sh \
+for file in VERSION manage.sh update.sh uninstall.sh upgrade.sh doctor.sh \
+  backup.sh automations.sh \
   vps-monitor/vps_monitor.py vps-monitor/requirements.txt \
-  vps-monitor/vps-monitor.service; do
+  vps-monitor/vps-monitor.service \
+  home-assistant/blueprints/problem-notification.yaml \
+  home-assistant/blueprints/offline-notification.yaml \
+  home-assistant/blueprints/daily-summary.yaml; do
   if [[ ! -f "${source_dir}/${file}" ]]; then
     red "下載內容缺少 ${file}，已取消升級。"
     exit 1
@@ -83,7 +100,9 @@ if [[ "$(tr -d '[:space:]' < "${source_dir}/VERSION")" !=
   exit 1
 fi
 bash -n "${source_dir}/manage.sh" "${source_dir}/update.sh" \
-  "${source_dir}/uninstall.sh" "${source_dir}/upgrade.sh"
+  "${source_dir}/uninstall.sh" "${source_dir}/upgrade.sh" \
+  "${source_dir}/doctor.sh" "${source_dir}/backup.sh" \
+  "${source_dir}/automations.sh"
 python3 -m py_compile "${source_dir}/vps-monitor/vps_monitor.py"
 green "下載內容與基本語法檢查完成"
 
@@ -96,9 +115,12 @@ cp -a "${INSTALL_DIR}/.requirements.sha256" "${backup}/" 2>/dev/null || true
 cp -a "${INSTALL_DIR}/.version" "${backup}/" 2>/dev/null || true
 cp -a "${SERVICE_FILE}" "${backup}/vps-monitor.service" 2>/dev/null || true
 for file in "${MANAGE_COMMAND}" "${UPDATE_COMMAND}" \
-  "${UNINSTALL_COMMAND}" "${UPGRADE_COMMAND}"; do
+  "${UNINSTALL_COMMAND}" "${UPGRADE_COMMAND}" "${DOCTOR_COMMAND}" \
+  "${BACKUP_COMMAND}" "${AUTOMATIONS_COMMAND}"; do
   [[ -e "${file}" ]] && cp -a "${file}" "${backup}/$(basename "${file}")"
 done
+[[ ! -d "${INSTALL_DIR}/blueprints" ]] ||
+  cp -a "${INSTALL_DIR}/blueprints" "${backup}/"
 green "舊版本已備份：${backup}"
 
 rollback() {
@@ -116,10 +138,17 @@ rollback() {
   [[ ! -f "${backup}/vps-monitor.service" ]] ||
     install -m 0644 "${backup}/vps-monitor.service" "${SERVICE_FILE}"
   for name in vps-sentinel vps-sentinel-update vps-sentinel-uninstall \
-    vps-sentinel-upgrade; do
-    [[ ! -f "${backup}/${name}" ]] ||
+    vps-sentinel-upgrade vps-sentinel-doctor vps-sentinel-backup \
+    vps-sentinel-automations; do
+    if [[ -f "${backup}/${name}" ]]; then
       install -m 0755 "${backup}/${name}" "/usr/local/sbin/${name}"
+    else
+      rm -f -- "/usr/local/sbin/${name}"
+    fi
   done
+  rm -rf -- "${INSTALL_DIR}/blueprints"
+  [[ ! -d "${backup}/blueprints" ]] ||
+    cp -a "${backup}/blueprints" "${INSTALL_DIR}/"
   "${INSTALL_DIR}/venv/bin/pip" install --disable-pip-version-check \
     -r "${INSTALL_DIR}/requirements.txt" >/dev/null
   systemctl daemon-reload
@@ -159,6 +188,12 @@ install -m 0755 "${source_dir}/manage.sh" "${MANAGE_COMMAND}"
 install -m 0755 "${source_dir}/update.sh" "${UPDATE_COMMAND}"
 install -m 0755 "${source_dir}/uninstall.sh" "${UNINSTALL_COMMAND}"
 install -m 0755 "${source_dir}/upgrade.sh" "${UPGRADE_COMMAND}"
+install -m 0755 "${source_dir}/doctor.sh" "${DOCTOR_COMMAND}"
+install -m 0755 "${source_dir}/backup.sh" "${BACKUP_COMMAND}"
+install -m 0755 "${source_dir}/automations.sh" "${AUTOMATIONS_COMMAND}"
+install -d -m 0755 "${INSTALL_DIR}/blueprints"
+install -m 0644 "${source_dir}"/home-assistant/blueprints/*.yaml \
+  "${INSTALL_DIR}/blueprints/"
 printf '%s\n' "${latest_version}" > "${INSTALL_DIR}/.version"
 systemctl daemon-reload
 if ! systemctl restart vps-monitor; then

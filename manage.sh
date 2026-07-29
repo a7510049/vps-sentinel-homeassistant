@@ -8,6 +8,9 @@ readonly DASHBOARD_FILE="${HA_DIR}/config/vps-sentinel-dashboard.yaml"
 readonly UPDATE_COMMAND="/usr/local/sbin/vps-sentinel-update"
 readonly UNINSTALL_COMMAND="/usr/local/sbin/vps-sentinel-uninstall"
 readonly UPGRADE_COMMAND="/usr/local/sbin/vps-sentinel-upgrade"
+readonly DOCTOR_COMMAND="/usr/local/sbin/vps-sentinel-doctor"
+readonly BACKUP_COMMAND="/usr/local/sbin/vps-sentinel-backup"
+readonly AUTOMATIONS_COMMAND="/usr/local/sbin/vps-sentinel-automations"
 
 green()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 yellow() { printf '\033[1;33m⚠ %s\033[0m\n' "$*"; }
@@ -241,6 +244,8 @@ views:
             name: 根目錄磁碟
           - entity: sensor.${vps_id}_uptime_hours
             name: 已運行時間
+          - entity: sensor.${vps_id}_last_report
+            name: 最近回報時間
           - entity: sensor.${vps_id}_security_updates
             name: 待安裝安全更新
           - entity: sensor.${vps_id}_docker_running
@@ -336,9 +341,12 @@ BANNER
   echo "  3) 切換資源模式"
   echo "  4) 調整告警門檻"
   echo "  5) 建立或更新儀表板"
-  echo "  6) 更新 VPS Sentinel"
-  echo "  7) 安全更新 Home Assistant"
-  echo "  8) 移除 VPS Sentinel"
+  echo "  6) Home Assistant 自動化模板"
+  echo "  7) 一鍵健康檢查與修復"
+  echo "  8) 備份與還原"
+  echo "  9) 更新 VPS Sentinel"
+  echo " 10) 安全更新 Home Assistant"
+  echo " 11) 移除 VPS Sentinel"
   echo "  0) 離開"
   echo
   read -r -p "請選擇：" choice
@@ -349,20 +357,41 @@ BANNER
     4) change_thresholds ;;
     5) install_dashboard ;;
     6)
+      if [[ -x "${AUTOMATIONS_COMMAND}" ]]; then
+        "${AUTOMATIONS_COMMAND}"
+      else
+        yellow "找不到自動化模板工具"
+      fi
+      ;;
+    7)
+      if [[ -x "${DOCTOR_COMMAND}" ]]; then
+        "${DOCTOR_COMMAND}"
+      else
+        yellow "找不到健康檢查工具"
+      fi
+      ;;
+    8)
+      if [[ -x "${BACKUP_COMMAND}" ]]; then
+        "${BACKUP_COMMAND}"
+      else
+        yellow "找不到備份管理工具"
+      fi
+      ;;
+    9)
       if [[ -x "${UPGRADE_COMMAND}" ]]; then
         "${UPGRADE_COMMAND}"
       else
         yellow "找不到 VPS Sentinel 升級工具"
       fi
       ;;
-    7)
+    10)
       if [[ -x "${UPDATE_COMMAND}" ]]; then
         "${UPDATE_COMMAND}"
       else
         yellow "找不到 Home Assistant 更新工具"
       fi
       ;;
-    8)
+    11)
       if [[ -x "${UNINSTALL_COMMAND}" ]]; then
         "${UNINSTALL_COMMAND}"
       else
@@ -370,7 +399,7 @@ BANNER
       fi
       ;;
     0) exit 0 ;;
-    *) yellow "請輸入 0 到 8。" ;;
+    *) yellow "請輸入 0 到 11。" ;;
   esac
   echo
   read -r -p "按 Enter 返回主選單……" _
