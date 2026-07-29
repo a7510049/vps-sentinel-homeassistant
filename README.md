@@ -154,6 +154,30 @@ sudo vps-sentinel-update
 重新執行 `setup.sh` 不會再自動拉取新版 Home Assistant，避免維護監控
 設定時意外升級。
 
+## 🧰 中文維護中心
+
+安裝完成後，日常管理只需要一個指令：
+
+```bash
+sudo vps-sentinel
+```
+
+維護中心可查看服務狀態與目前設定、切換資源模式、調整 CPU／記憶體／
+磁碟告警門檻、建立儀表板、安全更新 VPS Sentinel 與 Home Assistant，
+以及進入移除工具。
+設定變更前會自動備份；若監控服務無法重新啟動，會立即回復原設定。
+
+VPS Sentinel 升級會從 GitHub 最新正式 Release 下載原始碼，確認版本檔、
+必要檔案及 Python／Shell 基本語法後才替換程式。升級前保留舊版本；
+若新服務未能正常啟動，會自動回復。為節省空間，只保留最近三份備份。
+也可以直接執行 `sudo vps-sentinel-upgrade`。
+
+「建立或更新儀表板」只使用 Home Assistant 內建卡片，不需要 HACS。
+工具會先備份 `configuration.yaml`，產生獨立的
+`vps-sentinel-dashboard.yaml`，通過 Home Assistant 設定檢查後才重新
+啟動。若偵測到既有的 Lovelace YAML 自訂架構，會停止自動修改，避免
+覆蓋使用者設定。
+
 ## 🧹 安全移除
 
 一條龍安裝完成後，可使用中文移除工具：
