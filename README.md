@@ -1,14 +1,19 @@
 # VPS Sentinel for Home Assistant
 
-> 輕量、安全、可自架的 VPS 狀態監控與選配 HomeKit 告警方案
+> 把 VPS 的健康狀態帶進 Home Assistant
 
-透過 MQTT Discovery 將 VPS 的資源、服務與 Docker 狀態整合至
-Home Assistant，並透過 HomeKit Bridge 將重要異常同步至 Apple「家庭」。
+VPS Sentinel 是一套輕量、可自架的 VPS 監控工具。它會透過 MQTT
+Discovery，自動把 CPU、記憶體、磁碟、服務與 Docker 狀態加入
+Home Assistant，讓你用熟悉的儀表板查看主機狀況，並在異常時收到通知。
 
-## 平台相容性
+整套系統以安全預設值與低資源占用為設計重點，適合免費或小型 VPS。
+HomeKit 整合則保留為選配功能；即使沒有 HomePod 或 Apple TV，也不影響
+Home Assistant 儀表板與 Companion App 推播。
 
-本專案以 Ubuntu LTS VPS 為主要開發與部署環境。為確保一鍵安裝、
-服務管理及後續更新行為一致，支援範圍定義如下：
+## 支援環境
+
+專案以 Ubuntu LTS VPS 為主要部署環境。為了讓安裝、服務管理與後續
+更新維持一致，目前的支援範圍如下：
 
 | 平台 | 支援等級 | 說明 |
 | --- | --- | --- |
@@ -22,20 +27,19 @@ Home Assistant，並透過 HomeKit Bridge 將重要異常同步至 Apple「家�
 環境。目前面向一般 `x86_64` 或 `arm64` Linux VPS；容器內執行、
 精簡映像、WSL 及已停止安全維護的作業系統不在支援範圍內。
 
-「正式支援」代表專案會優先修正可重現的相容性問題；「實驗性支援」
-代表架構上可運行，但部署前仍建議先建立 VPS 快照或備份。
+正式支援的平台會優先處理可重現的相容性問題。實驗性支援代表核心
+架構可運行，但部署前仍建議先建立 VPS 快照或備份。
 
-## 最簡單：一條龍安裝
+## 快速開始
 
-適用於 Mosquitto、Home Assistant 與 VPS Monitor 都放在同一台 Ubuntu
-VPS 的使用方式。公開版本不需要 GitHub 帳號或 Deploy key，整行複製
-執行即可：
+如果要把 Mosquitto、Home Assistant 與 VPS Monitor 全部部署在同一台
+Ubuntu VPS，只要複製並執行這一行：
 
 ```bash
 git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && cd vps-sentinel-homeassistant && sudo bash setup.sh
 ```
 
-中文安裝器會自動完成：
+安裝器會以中文引導，並自動完成：
 
 - 安裝 Tailscale、Mosquitto、Docker、Home Assistant 與 VPS Monitor。
 - 產生兩組不同的 MQTT 高強度密碼。
@@ -43,16 +47,15 @@ git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && cd vps-s
 - 備份既有 Mosquitto 設定並保留 Home Assistant 資料。
 - 設定開機自動啟動並逐項檢查服務。
 
-你只需回答「VPS 顯示名稱」及「資源模式」。全新 VPS 還需要在瀏覽器
-授權一次 Tailscale。最後仍有兩個無法代替你的畫面操作：建立 Home
-Assistant 管理員，以及在 Home Assistant 新增 MQTT 整合。安裝器會在
-完成畫面直接顯示網址與需要填入的內容。
+過程中只需要選擇「VPS 顯示名稱」與「資源模式」。全新 VPS 需在
+瀏覽器授權一次 Tailscale；安裝完成後，再依畫面提示建立 Home Assistant
+管理員並加入 MQTT 整合即可。
 
 > 安裝器不修改 UFW、雲端防火牆或 3X-UI 連接埠。
 
-## 監控項目
+## 可以監控什麼
 
-Home Assistant 數值：
+Home Assistant 會自動建立以下資訊：
 
 - CPU、記憶體、根目錄磁碟使用率
 - 1 / 5 / 15 分鐘系統負載
@@ -61,7 +64,7 @@ Home Assistant 數值：
 - 可安裝安全更新數量
 - Docker 運行中、異常容器數（主機有 Docker 時）
 
-選配的 HomeKit 狀態：
+可用於自動化與通知的狀態：
 
 - `連線狀態`：監控程式停止或 VPS 失聯時顯示問題
 - `系統負載狀態`：CPU ≥ 90%、RAM ≥ 90%，連續約 5 分鐘時顯示問題
@@ -70,12 +73,12 @@ Home Assistant 數值：
   restarting 容器
 - `重新啟動提醒`：Ubuntu 建立 `/var/run/reboot-required` 時顯示問題
 
-所有門檻都能在環境檔調整。
+告警門檻都能在環境檔中調整，不需要修改程式。
 
-## 1. 準備 MQTT
+## 接到既有的 Home Assistant
 
 如果 Home Assistant、Mosquitto 與本監控程式都部署在同一台 Ubuntu
-VPS，請直接參考：
+VPS，可參考完整中文指南：
 
 **[Ubuntu VPS：Mosquitto + Home Assistant Container 完整中文部署指南](docs/mqtt-vps-setup.md)**
 
@@ -87,16 +90,16 @@ VPS 必須能主動連到 broker；不需要把 VPS 的任何連接埠公開到�
 若 broker 不在 VPN / 私網內，務必使用 TLS，不要將未加密的 1883
 直接開放到公網。
 
-## 2. 中文一鍵安裝
+## 只安裝 VPS Monitor
 
-若只需要將監控程式接到既有的 MQTT broker，可執行：
+如果已經有可用的 Home Assistant 與 MQTT broker，只需要安裝監控程式：
 
 ```bash
 git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && sudo bash vps-sentinel-homeassistant/vps-monitor/install.sh
 ```
 
-安裝器會以中文依序詢問 MQTT 位址、TLS、帳密、VPS 名稱、要監控的
-systemd 服務與告警門檻，接著自動：
+安裝器會依序詢問 MQTT 位址、TLS、帳密、VPS 名稱、要監控的 systemd
+服務與告警門檻，接著自動：
 
 1. 安裝 Python、虛擬環境與 CA 憑證。
 2. 以權限 `600` 建立 `/etc/vps-monitor.env`。
@@ -114,7 +117,7 @@ systemd 服務與告警門檻，接著自動：
 | 即時監控 | 30 秒 | 1 分鐘 | 6 小時 | 開啟 |
 
 不論選擇哪個模式，MQTT 都維持長連線，因此 VPS 或監控程式斷線時，
-仍會透過 Last Will 立即更新「VPS 離線」狀態。
+仍會透過 Last Will 立即更新「連線狀態」。
 若 Mosquitto 因更新或重新啟動而短暫中斷，監控程式會在背景以最長
 5 分鐘的退避間隔持續重連，不會退出或形成快速重啟循環；重新連線後
 會自動恢復 Discovery、上線狀態與數值回報。
@@ -128,19 +131,7 @@ journalctl -u vps-monitor -f
 
 成功後，Home Assistant 的 MQTT 整合下會自動出現 VPS 裝置。
 
-## 安全性
-
-- 不要將未加密的 MQTT `1883` 連接埠公開至網際網路。
-- 帳密只會儲存在 VPS 本機的 root-only 設定檔，不應提交至 Git。
-- 正式環境執行前，建議先閱讀 [安全政策](SECURITY.md)。
-- 發現安全問題時，請勿建立公開 Issue；請依安全政策私下回報。
-
-## 授權與貢獻
-
-本專案採用 [MIT License](LICENSE)。錯誤修正、文件改善與平台相容性
-回報皆歡迎參與；提交前請閱讀 [貢獻指南](CONTRIBUTING.md)。
-
-## 3. 加入 HomeKit
+## 選配：加入 HomeKit
 
 > [!IMPORTANT]
 > HomeKit 是選配功能，不影響 Home Assistant 儀表板與手機推播。
@@ -171,7 +162,7 @@ homekit: !include vps_homekit.yaml
 > 實體 ID 是首次建立時決定的。如果名稱曾被占用，Home Assistant
 > 可能加上 `_2`；此時請依 UI 中的實際實體 ID 修改 YAML。
 
-## 4. 驗證告警
+## 測試告警
 
 可安全地停止監控程式測試離線狀態：
 
@@ -179,7 +170,7 @@ homekit: !include vps_homekit.yaml
 sudo systemctl stop vps-monitor
 ```
 
-MQTT 的 Last Will 會立即將「VPS 離線」切為開啟。測完執行：
+MQTT 的 Last Will 會立即將「連線狀態」切換為問題。測試完成後執行：
 
 ```bash
 sudo systemctl start vps-monitor
@@ -188,3 +179,15 @@ sudo systemctl start vps-monitor
 若已配置家庭中樞，可在 Apple「家庭」中針對五個狀態感測器設定
 自動化與活動通知。沒有家庭中樞時，請使用 Home Assistant 自動化搭配
 Companion App 推播。
+
+## 安全性
+
+- 不要將未加密的 MQTT `1883` 連接埠公開至網際網路。
+- 帳密只會儲存在 VPS 本機的 root-only 設定檔，不應提交至 Git。
+- 正式環境執行前，建議先閱讀 [安全政策](SECURITY.md)。
+- 發現安全問題時，請勿建立公開 Issue；請依安全政策私下回報。
+
+## 授權與貢獻
+
+本專案採用 [MIT License](LICENSE)。歡迎回報問題、改善文件或協助測試
+其他平台；提交變更前請先閱讀 [貢獻指南](CONTRIBUTING.md)。
