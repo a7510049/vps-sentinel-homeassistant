@@ -43,6 +43,14 @@ if [[ ! -f "${REPO_DIR}/uninstall.sh" ]]; then
   red "找不到 uninstall.sh，請先重新下載完整專案。"
   exit 1
 fi
+if [[ ! -f "${REPO_DIR}/manage.sh" ]]; then
+  red "找不到 manage.sh，請先重新下載完整專案。"
+  exit 1
+fi
+if [[ ! -f "${REPO_DIR}/upgrade.sh" || ! -f "${REPO_DIR}/VERSION" ]]; then
+  red "找不到升級工具或版本檔，請先重新下載完整專案。"
+  exit 1
+fi
 
 ask_yes_no() {
   local result_var="$1" question="$2" default_answer="$3" answer hint
@@ -482,6 +490,11 @@ install -m 0755 "${REPO_DIR}/update.sh" \
   /usr/local/sbin/vps-sentinel-update
 install -m 0755 "${REPO_DIR}/uninstall.sh" \
   /usr/local/sbin/vps-sentinel-uninstall
+install -m 0755 "${REPO_DIR}/manage.sh" \
+  /usr/local/sbin/vps-sentinel
+install -m 0755 "${REPO_DIR}/upgrade.sh" \
+  /usr/local/sbin/vps-sentinel-upgrade
+install -m 0644 "${REPO_DIR}/VERSION" "${MONITOR_DIR}/.version"
 
 blue "步驟 6/6：最後檢查"
 sleep 3
@@ -535,5 +548,6 @@ fi
 echo "  TLS：關閉"
 echo
 echo "完成 MQTT 整合後，VPS 裝置會自動出現。"
+echo "日後維護與調整：sudo vps-sentinel"
 echo "日後更新 Home Assistant：sudo vps-sentinel-update"
 echo "日後完整移除：sudo vps-sentinel-uninstall"
