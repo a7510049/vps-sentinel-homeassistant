@@ -47,7 +47,10 @@ if [[ ! -f "${REPO_DIR}/manage.sh" ]]; then
   red "找不到 manage.sh，請先重新下載完整專案。"
   exit 1
 fi
-if [[ ! -f "${REPO_DIR}/upgrade.sh" || ! -f "${REPO_DIR}/VERSION" ]]; then
+if [[ ! -f "${REPO_DIR}/upgrade.sh" || ! -f "${REPO_DIR}/VERSION" ||
+      ! -f "${REPO_DIR}/doctor.sh" || ! -f "${REPO_DIR}/backup.sh" ||
+      ! -f "${REPO_DIR}/automations.sh" ||
+      ! -d "${REPO_DIR}/home-assistant/blueprints" ]]; then
   red "找不到升級工具或版本檔，請先重新下載完整專案。"
   exit 1
 fi
@@ -191,8 +194,21 @@ green "必要套件已就緒"
 
 blue "設定 Tailscale 安全連線"
 if ! command -v tailscale >/dev/null 2>&1; then
+  tailscale_installer="$(mktemp)"
   echo "尚未安裝 Tailscale，將使用 Tailscale 官方安裝程式。"
-  curl -fsSL https://tailscale.com/install.sh | sh
+  if ! curl -fL --retry 3 --proto '=https' --tlsv1.2 \
+      https://tailscale.com/install.sh -o "${tailscale_installer}"; then
+    rm -f -- "${tailscale_installer}"
+    red "無法下載 Tailscale 官方安裝程式。"
+    exit 1
+  fi
+  if ! bash -n "${tailscale_installer}"; then
+    rm -f -- "${tailscale_installer}"
+    red "Tailscale 安裝程式語法驗證失敗。"
+    exit 1
+  fi
+  bash "${tailscale_installer}"
+  rm -f -- "${tailscale_installer}"
 fi
 systemctl enable --now tailscaled
 
@@ -494,6 +510,15 @@ install -m 0755 "${REPO_DIR}/manage.sh" \
   /usr/local/sbin/vps-sentinel
 install -m 0755 "${REPO_DIR}/upgrade.sh" \
   /usr/local/sbin/vps-sentinel-upgrade
+install -m 0755 "${REPO_DIR}/doctor.sh" \
+  /usr/local/sbin/vps-sentinel-doctor
+install -m 0755 "${REPO_DIR}/backup.sh" \
+  /usr/local/sbin/vps-sentinel-backup
+install -m 0755 "${REPO_DIR}/automations.sh" \
+  /usr/local/sbin/vps-sentinel-automations
+install -d -m 0755 "${MONITOR_DIR}/blueprints"
+install -m 0644 "${REPO_DIR}"/home-assistant/blueprints/*.yaml \
+  "${MONITOR_DIR}/blueprints/"
 install -m 0644 "${REPO_DIR}/VERSION" "${MONITOR_DIR}/.version"
 
 blue "步驟 6/6：最後檢查"
@@ -549,5 +574,6 @@ echo "  TLS：關閉"
 echo
 echo "完成 MQTT 整合後，VPS 裝置會自動出現。"
 echo "日後維護與調整：sudo vps-sentinel"
+echo "一鍵健康檢查：sudo vps-sentinel-doctor"
 echo "日後更新 Home Assistant：sudo vps-sentinel-update"
 echo "日後完整移除：sudo vps-sentinel-uninstall"

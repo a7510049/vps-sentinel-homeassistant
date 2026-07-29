@@ -14,6 +14,11 @@ readonly UPDATE_COMMAND="/usr/local/sbin/vps-sentinel-update"
 readonly UNINSTALL_COMMAND="/usr/local/sbin/vps-sentinel-uninstall"
 readonly MANAGE_COMMAND="/usr/local/sbin/vps-sentinel"
 readonly UPGRADE_COMMAND="/usr/local/sbin/vps-sentinel-upgrade"
+readonly DOCTOR_COMMAND="/usr/local/sbin/vps-sentinel-doctor"
+readonly BACKUP_COMMAND="/usr/local/sbin/vps-sentinel-backup"
+readonly AUTOMATIONS_COMMAND="/usr/local/sbin/vps-sentinel-automations"
+readonly SETTINGS_BACKUP_DIR="/opt/vps-sentinel-backups"
+readonly REPORT_DIR="/root/vps-sentinel-reports"
 
 green()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 yellow() { printf '\033[1;33m⚠ %s\033[0m\n' "$*"; }
@@ -45,7 +50,8 @@ ask_yes_no() {
 remove_tree() {
   local target="$1"
   case "${target}" in
-    "${HA_DIR}"|"${BACKUP_DIR}"|"${MONITOR_DIR}"|"${MONITOR_BACKUP_DIR}")
+    "${HA_DIR}"|"${BACKUP_DIR}"|"${MONITOR_DIR}"|"${MONITOR_BACKUP_DIR}"|\
+    "${SETTINGS_BACKUP_DIR}"|"${REPORT_DIR}")
       rm -rf -- "${target}"
       ;;
     *)
@@ -261,7 +267,10 @@ case "${choice}" in
     remove_mqtt_settings
     remove_tailscale_serve
     rm -f -- "${CREDENTIALS_FILE}" "${UPDATE_COMMAND}" "${MANAGE_COMMAND}" \
-      "${UPGRADE_COMMAND}"
+      "${UPGRADE_COMMAND}" "${DOCTOR_COMMAND}" "${BACKUP_COMMAND}" \
+      "${AUTOMATIONS_COMMAND}"
+    remove_tree "${SETTINGS_BACKUP_DIR}"
+    remove_tree "${REPORT_DIR}"
 
     remove_packages=""
     ask_yes_no remove_packages \
