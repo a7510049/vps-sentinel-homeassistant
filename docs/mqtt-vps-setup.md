@@ -176,24 +176,28 @@ sudo docker compose ps
 
 ```yaml
 http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 127.0.0.1
   server_host:
     - 127.0.0.1
-    - YOUR_TAILSCALE_IP
   ip_ban_enabled: true
   login_attempts_threshold: 5
 ```
 
-將 `YOUR_TAILSCALE_IP` 換成 VPS 的 `100.x.x.x` 位址。檢查後重啟：
+檢查後重啟，接著啟用 tailnet 私有的 Tailscale Serve：
 
 ```bash
 sudo docker exec homeassistant python -m homeassistant \
   --script check_config --config /config
 sudo docker restart homeassistant
+sudo tailscale serve --bg http://127.0.0.1:8123
+sudo tailscale serve status
 ```
 
-> 若 Home Assistant 在開機時早於 Tailscale 啟動，綁定 Tailscale IP
-> 可能失敗。遇到這種情況，請改用防火牆限制 `8123`，不要讓 MQTT
-> 重新監聽 Tailscale IP。
+Tailscale Serve 會顯示一個僅限 tailnet 存取的 `https://*.ts.net` 網址，
+並自動管理 TLS 憑證。第一次使用時，可能需要在瀏覽器確認啟用 HTTPS。
+不要使用 Funnel，否則服務會公開到網際網路。
 
 ## 6. 在 Home Assistant 加入 MQTT
 
@@ -301,8 +305,6 @@ systemctl status mosquitto
 systemctl status vps-monitor
 journalctl -u vps-monitor -f
 
-# 更新 Home Assistant
-cd /opt/homeassistant
-sudo docker compose pull
-sudo docker compose up -d
+# 使用本專案的備份與回退機制更新 Home Assistant
+sudo vps-sentinel-update
 ```

@@ -35,6 +35,10 @@ if [[ ! -f "${REPO_DIR}/vps-monitor/vps_monitor.py" ]]; then
   red "專案檔案不完整，請在 repository 根目錄執行 setup.sh。"
   exit 1
 fi
+if [[ ! -f "${REPO_DIR}/update.sh" ]]; then
+  red "找不到 update.sh，請先重新下載完整專案。"
+  exit 1
+fi
 
 ask_yes_no() {
   local result_var="$1" question="$2" default_answer="$3" answer hint
@@ -126,6 +130,13 @@ fi
 if [[ "${ID}" == "debian" ]]; then
   yellow "目前執行於 ${PRETTY_NAME}；Debian 屬於實驗性支援平台。"
 fi
+case "${ID}:${VERSION_ID:-}" in
+  ubuntu:22.04|ubuntu:24.04|debian:12|debian:13) ;;
+  *)
+    yellow "此版本不在主要測試範圍：${PRETTY_NAME}"
+    yellow "安裝器會繼續，但部分套件名稱或設定可能不同。"
+    ;;
+esac
 
 memory_mb="$(awk '/MemTotal/ {printf "%d", $2 / 1024}' /proc/meminfo)"
 disk_mb="$(df -Pm / | awk 'NR==2 {print $4}')"
@@ -262,7 +273,9 @@ fi
 
 blue "步驟 4/6：部署 Home Assistant"
 install -d -m 0755 "${HA_DIR}/config"
+ha_new_install=false
 if [[ ! -e "${HA_DIR}/compose.yaml" ]]; then
+  ha_new_install=true
   cat > "${HA_DIR}/compose.yaml" <<'COMPOSE'
 services:
   homeassistant:
@@ -320,10 +333,62 @@ fi
 (
   cd "${HA_DIR}"
   docker compose config >/dev/null
-  docker compose pull
+  if [[ "${ha_new_install}" == "true" ]]; then
+    docker compose pull
+  fi
   docker compose up -d
 )
 green "Home Assistant Container 已啟動"
+
+ha_url="http://${tailscale_ip}:8123"
+serve_usable=false
+if tailscale serve --bg http://127.0.0.1:8123 &&
+   tailscale serve status 2>/dev/null |
+     grep -q '127.0.0.1:8123'; then
+  if grep -q '^[[:space:]]*server_host:' \
+      "${HA_DIR}/config/configuration.yaml" &&
+     grep -Fq "    - ${tailscale_ip}" \
+      "${HA_DIR}/config/configuration.yaml"; then
+    backup_if_exists "${HA_DIR}/config/configuration.yaml"
+    if ! grep -q '^[[:space:]]*use_x_forwarded_for:' \
+        "${HA_DIR}/config/configuration.yaml"; then
+      sed -i '/^[[:space:]]*server_host:[[:space:]]*$/i\
+  use_x_forwarded_for: true\
+  trusted_proxies:\
+    - 127.0.0.1' "${HA_DIR}/config/configuration.yaml"
+    fi
+    escaped_ip="${tailscale_ip//./\\.}"
+    sed -Ei \
+      "/^[[:space:]]*-[[:space:]]*${escaped_ip}[[:space:]]*$/d" \
+      "${HA_DIR}/config/configuration.yaml"
+    (
+      cd "${HA_DIR}"
+      docker compose restart homeassistant
+    )
+    green "Home Assistant 已改由 Tailscale Serve 私有 HTTPS 存取"
+    serve_usable=true
+  elif grep -q '^[[:space:]]*use_x_forwarded_for:[[:space:]]*true' \
+      "${HA_DIR}/config/configuration.yaml" &&
+       grep -q '^[[:space:]]*-[[:space:]]*127\.0\.0\.1[[:space:]]*$' \
+      "${HA_DIR}/config/configuration.yaml"; then
+    serve_usable=true
+  else
+    yellow "既有 Home Assistant HTTP 設定不是由本安裝器管理。"
+    yellow "為避免破壞自訂設定，未自動切換至 Tailscale Serve 網址。"
+  fi
+  if [[ "${serve_usable}" == "true" ]]; then
+    tailscale_dns="$(tailscale status --json 2>/dev/null |
+      python3 -c \
+        'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))' \
+        2>/dev/null || true)"
+    if [[ -n "${tailscale_dns}" ]]; then
+      ha_url="https://${tailscale_dns}"
+    fi
+  fi
+else
+  yellow "Tailscale Serve 尚未啟用，暫時沿用 Tailscale IP 存取。"
+  yellow "之後可重新執行安裝器再次設定。"
+fi
 
 blue "步驟 5/6：設定 VPS Monitor"
 if [[ -e "${MONITOR_ENV}" ]]; then
@@ -389,14 +454,28 @@ install -m 0755 "${REPO_DIR}/vps-monitor/vps_monitor.py" \
   "${MONITOR_DIR}/vps_monitor.py"
 install -m 0644 "${REPO_DIR}/vps-monitor/requirements.txt" \
   "${MONITOR_DIR}/requirements.txt"
-python3 -m venv "${MONITOR_DIR}/venv"
-"${MONITOR_DIR}/venv/bin/pip" install --disable-pip-version-check \
-  -r "${MONITOR_DIR}/requirements.txt"
+requirements_hash="$(sha256sum "${MONITOR_DIR}/requirements.txt" | awk '{print $1}')"
+installed_hash="$(cat "${MONITOR_DIR}/.requirements.sha256" 2>/dev/null || true)"
+if [[ ! -x "${MONITOR_DIR}/venv/bin/python" ||
+      "${requirements_hash}" != "${installed_hash}" ]]; then
+  echo "Python 依賴有變更，正在建立執行環境。"
+  systemctl stop vps-monitor 2>/dev/null || true
+  python3 -m venv --clear "${MONITOR_DIR}/venv"
+  "${MONITOR_DIR}/venv/bin/pip" install --disable-pip-version-check \
+    -r "${MONITOR_DIR}/requirements.txt"
+  printf '%s\n' "${requirements_hash}" > \
+    "${MONITOR_DIR}/.requirements.sha256"
+else
+  green "Python 依賴未變更，略過重複安裝"
+fi
 install -m 0644 "${REPO_DIR}/vps-monitor/vps-monitor.service" \
   /etc/systemd/system/vps-monitor.service
 systemctl daemon-reload
-systemctl enable --now vps-monitor
+systemctl enable vps-monitor
+systemctl restart vps-monitor
 green "VPS Monitor 已啟動並設為開機自動執行"
+install -m 0755 "${REPO_DIR}/update.sh" \
+  /usr/local/sbin/vps-sentinel-update
 
 blue "步驟 6/6：最後檢查"
 sleep 3
@@ -432,7 +511,7 @@ printf '\033[1;32m%s\033[0m\n' " 安裝完成"
 printf '\033[1;32m%s\033[0m\n' \
   "========================================================"
 echo
-echo "Home Assistant： http://${tailscale_ip}:8123"
+echo "Home Assistant： ${ha_url}"
 echo
 echo "第一次使用仍需完成兩個畫面操作："
 echo "  1. 開啟上方網址，建立 Home Assistant 管理員"
@@ -450,3 +529,4 @@ fi
 echo "  TLS：關閉"
 echo
 echo "完成 MQTT 整合後，VPS 裝置會自動出現。"
+echo "日後更新 Home Assistant：sudo vps-sentinel-update"

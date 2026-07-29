@@ -1,5 +1,5 @@
 [Unit]
-Description=Ubuntu VPS monitor for Home Assistant
+Description=VPS Sentinel monitor for Home Assistant
 Wants=network-online.target
 After=network-online.target
 
@@ -22,4 +22,3 @@ LockPersonality=true
 
 [Install]
 WantedBy=multi-user.target
-

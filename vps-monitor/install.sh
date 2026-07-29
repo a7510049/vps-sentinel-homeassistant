@@ -6,6 +6,22 @@ readonly ENV_FILE="/etc/vps-monitor.env"
 readonly SERVICE_FILE="/etc/systemd/system/vps-monitor.service"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
+# Values are assigned indirectly by the prompt helpers.
+reuse_config=""
+mqtt_host=""
+mqtt_tls=""
+mqtt_port=""
+mqtt_username=""
+mqtt_password=""
+vps_id=""
+vps_name=""
+services=""
+monitor_network=""
+cpu_warn=""
+memory_warn=""
+disk_warn=""
+overload_samples=""
+
 info()  { printf '\n\033[1;36m%s\033[0m\n' "$*"; }
 ok()    { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 warn()  { printf '\033[1;33m⚠ %s\033[0m\n' "$*"; }
@@ -100,7 +116,7 @@ clear
 printf '\033[1;35m'
 cat <<'BANNER'
 ====================================================
- Ubuntu VPS → Home Assistant → HomeKit 一鍵安裝器
+ VPS Sentinel 中文安裝器
 ====================================================
 BANNER
 printf '\033[0m'
@@ -238,15 +254,27 @@ apt-get install -y --no-install-recommends \
 install -d -m 0755 "${INSTALL_DIR}"
 install -m 0755 "${SCRIPT_DIR}/vps_monitor.py" "${INSTALL_DIR}/vps_monitor.py"
 install -m 0644 "${SCRIPT_DIR}/requirements.txt" "${INSTALL_DIR}/requirements.txt"
-python3 -m venv "${INSTALL_DIR}/venv"
-"${INSTALL_DIR}/venv/bin/pip" install --disable-pip-version-check \
-  -r "${INSTALL_DIR}/requirements.txt"
+requirements_hash="$(sha256sum "${INSTALL_DIR}/requirements.txt" | awk '{print $1}')"
+installed_hash="$(cat "${INSTALL_DIR}/.requirements.sha256" 2>/dev/null || true)"
+if [[ ! -x "${INSTALL_DIR}/venv/bin/python" ||
+      "${requirements_hash}" != "${installed_hash}" ]]; then
+  info "Python 依賴有變更，正在建立執行環境"
+  systemctl stop vps-monitor 2>/dev/null || true
+  python3 -m venv --clear "${INSTALL_DIR}/venv"
+  "${INSTALL_DIR}/venv/bin/pip" install --disable-pip-version-check \
+    -r "${INSTALL_DIR}/requirements.txt"
+  printf '%s\n' "${requirements_hash}" > \
+    "${INSTALL_DIR}/.requirements.sha256"
+else
+  ok "Python 依賴未變更，略過重複安裝"
+fi
 install -m 0644 "${SCRIPT_DIR}/vps-monitor.service" "${SERVICE_FILE}"
 systemctl daemon-reload
 ok "程式與 systemd 服務已安裝"
 
 info "步驟 4/4：啟動並檢查"
-systemctl enable --now vps-monitor
+systemctl enable vps-monitor
+systemctl restart vps-monitor
 sleep 3
 if systemctl is-active --quiet vps-monitor; then
   ok "vps-monitor 已啟動並設為開機自動執行"

@@ -13,13 +13,19 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Check shell syntax
-        run: bash -n setup.sh vps-monitor/install.sh
+        run: bash -n setup.sh update.sh vps-monitor/install.sh
 
-      - name: Run ShellCheck on one-stop installer
-        run: shellcheck setup.sh
+      - name: Run ShellCheck
+        run: shellcheck setup.sh update.sh vps-monitor/install.sh
+
+      - name: Install Python dependencies
+        run: python3 -m pip install -r vps-monitor/requirements.txt
+
+      - name: Run Python tests
+        run: python3 -m unittest discover -s tests -v
 
       - name: Check Python syntax
-        run: python3 -m py_compile vps-monitor/vps_monitor.py
+        run: python3 -m py_compile vps-monitor/vps_monitor.py tests/test_vps_monitor.py

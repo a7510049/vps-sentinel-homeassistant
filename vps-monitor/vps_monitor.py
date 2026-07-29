@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+import platform
 import re
 import shutil
 import socket
@@ -45,12 +46,27 @@ DOCKER_PRESENT = shutil.which("docker") is not None
 if not HOST:
     raise SystemExit("MQTT_HOST is required")
 
+def os_release():
+    values = {}
+    try:
+        with open("/etc/os-release", encoding="utf-8") as release_file:
+            for line in release_file:
+                key, separator, value = line.rstrip().partition("=")
+                if separator:
+                    values[key] = value.strip().strip('"')
+    except OSError:
+        pass
+    return values
+
+
+OS_RELEASE = os_release()
 DEVICE = {
     "identifiers": [f"ubuntu_vps_{VPS_ID}"],
     "name": NAME,
-    "manufacturer": "Ubuntu",
-    "model": "VPS",
-    "sw_version": os.uname().release,
+    # Keep the existing identifier so upgrades do not create a duplicate device.
+    "manufacturer": OS_RELEASE.get("NAME", "Linux"),
+    "model": "VPS Sentinel",
+    "sw_version": platform.release(),
 }
 
 
@@ -63,15 +79,19 @@ def run(command):
         return None
 
 
-def security_updates():
-    result = run(["apt-get", "-s", "upgrade"])
-    if not result:
-        return -1
+def parse_security_updates(output):
     return sum(
         1
-        for line in result.stdout.splitlines()
+        for line in output.splitlines()
         if line.startswith("Inst ") and "-security" in line
     )
+
+
+def security_updates():
+    result = run(["apt-get", "-s", "upgrade"])
+    if not result or result.returncode != 0:
+        return "unknown"
+    return parse_security_updates(result.stdout)
 
 
 def service_health():
@@ -83,16 +103,8 @@ def service_health():
     return failed
 
 
-def docker_health():
-    if not DOCKER_PRESENT:
-        return {"available": False, "running": 0, "unhealthy": 0}
-    result = run([
-        "docker", "ps", "-a", "--format",
-        "{{.State}}|{{if .Status}}{{.Status}}{{end}}",
-    ])
-    if not result or result.returncode != 0:
-        return {"available": False, "running": 0, "unhealthy": 0}
-    rows = [row.lower() for row in result.stdout.splitlines() if row]
+def parse_docker_health(output):
+    rows = [row.lower() for row in output.splitlines() if row]
     return {
         "available": True,
         "running": sum(row.startswith("running|") for row in rows),
@@ -100,6 +112,18 @@ def docker_health():
             "unhealthy" in row or row.startswith("restarting|") for row in rows
         ),
     }
+
+
+def docker_health():
+    if not DOCKER_PRESENT:
+        return {"available": False, "running": "unknown", "unhealthy": "unknown"}
+    result = run([
+        "docker", "ps", "-a", "--format",
+        "{{.State}}|{{if .Status}}{{.Status}}{{end}}",
+    ])
+    if not result or result.returncode != 0:
+        return {"available": False, "running": "unknown", "unhealthy": "unknown"}
+    return parse_docker_health(result.stdout)
 
 
 def config_sensor(key, name, unit=None, device_class=None, state_class=None,
@@ -175,16 +199,26 @@ def publish_discovery(client):
         "security_updates": config_sensor(
             "security_updates", "待安裝安全更新", icon="mdi:shield-alert"
         ),
+        "failed_services": config_sensor(
+            "failed_services", "異常服務", icon="mdi:server-off"
+        ),
+    }
+    docker_sensors = {
         "docker_running": config_sensor(
             "docker_running", "執行中的容器", icon="mdi:docker"
         ),
         "docker_unhealthy": config_sensor(
             "docker_unhealthy", "Docker 異常", icon="mdi:docker"
         ),
-        "failed_services": config_sensor(
-            "failed_services", "異常服務", icon="mdi:server-off"
-        ),
     }
+    if DOCKER_PRESENT:
+        sensors.update(docker_sensors)
+    else:
+        for key in docker_sensors:
+            client.publish(
+                f"{PREFIX}/sensor/{VPS_ID}/{key}/config",
+                payload=None, qos=1, retain=True,
+            )
     network_sensors = {
         "download_mbps": config_sensor(
             "download_mbps", "下載速率", "Mbit/s", "data_rate", "measurement"
@@ -263,10 +297,10 @@ def main():
     previous_net = psutil.net_io_counters() if MONITOR_NETWORK else None
     previous_time = time.monotonic()
     overload_count = 0
-    updates = -1
+    updates = "unknown"
     next_update_check = 0.0
     failed = []
-    docker = {"available": False, "running": 0, "unhealthy": 0}
+    docker = {"available": False, "running": "unknown", "unhealthy": "unknown"}
     next_health_check = 0.0
 
     try:
@@ -317,7 +351,15 @@ def main():
                 "failed_services": ", ".join(failed) if failed else "無",
                 "resource_overload": overload_count >= OVERLOAD_SAMPLES,
                 "disk_low": disk >= DISK_WARN,
-                "service_problem": bool(failed or docker["unhealthy"]),
+                "service_problem": bool(
+                    failed
+                    or (DOCKER_PRESENT and not docker["available"])
+                    or (
+                        docker["available"]
+                        and isinstance(docker["unhealthy"], int)
+                        and docker["unhealthy"] > 0
+                    )
+                ),
                 "reboot_required": os.path.exists("/var/run/reboot-required"),
             }
             if MONITOR_NETWORK:
