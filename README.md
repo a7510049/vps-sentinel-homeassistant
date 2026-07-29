@@ -1,6 +1,6 @@
 # VPS Sentinel for Home Assistant
 
-> 輕量、安全、可自架的 VPS 狀態監控與 HomeKit 告警方案
+> 輕量、安全、可自架的 VPS 狀態監控與選配 HomeKit 告警方案
 
 透過 MQTT Discovery 將 VPS 的資源、服務與 Docker 狀態整合至
 Home Assistant，並透過 HomeKit Bridge 將重要異常同步至 Apple「家庭」。
@@ -61,7 +61,7 @@ Home Assistant 數值：
 - 可安裝安全更新數量
 - Docker 運行中、異常容器數（主機有 Docker 時）
 
-HomeKit 狀態：
+選配的 HomeKit 狀態：
 
 - `VPS 離線`：監控程式停止或 VPS 失聯
 - `VPS 資源過載`：CPU ≥ 90%、RAM ≥ 90%，連續約 5 分鐘
@@ -142,6 +142,20 @@ journalctl -u vps-monitor -f
 
 ## 3. 加入 HomeKit
 
+> [!IMPORTANT]
+> HomeKit 是選配功能，不影響 Home Assistant 儀表板與手機推播。
+> iPhone 必須能在相同區域網路找到 Home Assistant Bridge 才能完成
+> 初次配對；Tailscale 通常不會轉送 HomeKit 使用的 mDNS 廣播。若
+> Home Assistant 位於遠端 VPS，可能需要額外配置 mDNS reflector 與
+> `advertise_ip`，本安裝器不會自動變更這類網路設定。
+>
+> 只有 iPhone 並不等於具備家庭中樞。離家控制、共享家庭及 Apple
+>「家庭」自動化需要 HomePod 或 Apple TV 擔任家庭中樞。沒有家庭中樞
+> 時，建議直接使用 Home Assistant App 查看狀態與接收推播通知。
+>
+> 參考：[Apple 家庭中樞說明](https://support.apple.com/102557)、
+> [Home Assistant HomeKit Bridge 網路需求](https://www.home-assistant.io/integrations/homekit/)
+
 先將 [home-assistant/vps_homekit.yaml](home-assistant/vps_homekit.yaml)
 複製到 Home Assistant 設定目錄，並在 `configuration.yaml` 加入：
 
@@ -171,4 +185,6 @@ MQTT 的 Last Will 會立即將「VPS 離線」切為開啟。測完執行：
 sudo systemctl start vps-monitor
 ```
 
-在 Apple「家庭」中，可針對五個狀態感測器開啟「活動通知」。
+若已配置家庭中樞，可在 Apple「家庭」中針對五個狀態感測器設定
+自動化與活動通知。沒有家庭中樞時，請使用 Home Assistant 自動化搭配
+Companion App 推播。
