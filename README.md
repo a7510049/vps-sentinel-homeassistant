@@ -1,4 +1,4 @@
-# VPS Sentinel for Home Assistant
+# 🖥️ VPS Sentinel for Home Assistant
 
 > 把 VPS 的健康狀態帶進 Home Assistant
 
@@ -10,18 +10,18 @@ Home Assistant，讓你用熟悉的儀表板查看主機狀況，並在異常時
 HomeKit 整合則保留為選配功能；即使沒有 HomePod 或 Apple TV，也不影響
 Home Assistant 儀表板與 Companion App 推播。
 
-## 支援環境
+## 🧩 支援環境
 
 專案以 Ubuntu LTS VPS 為主要部署環境。為了讓安裝、服務管理與後續
 更新維持一致，目前的支援範圍如下：
 
 | 平台 | 支援等級 | 說明 |
 | --- | --- | --- |
-| Ubuntu 22.04 LTS、24.04 LTS | 正式支援 | 建議使用；安裝流程與文件均以此環境為基準 |
-| Debian 12、13 | 實驗性支援 | 核心架構相容，但不同套件版本可能需要個別調整 |
-| 其他 Ubuntu／Debian 版本 | 盡力支援 | 安裝器可嘗試執行，但不保證所有套件與設定相容 |
-| RHEL、Rocky Linux、AlmaLinux、Alpine、Arch Linux | 不支援 | 套件管理、服務管理或設定路徑不同 |
-| Windows、macOS | 不支援 | 監控程式與安裝器依賴 Linux 系統介面 |
+| Ubuntu 22.04 LTS、24.04 LTS | ✅ 正式支援 | 建議使用；安裝流程與文件均以此環境為基準 |
+| Debian 12、13 | 🧪 實驗性支援 | 核心架構相容，但不同套件版本可能需要個別調整 |
+| 其他 Ubuntu／Debian 版本 | ⚠️ 盡力支援 | 安裝器可嘗試執行，但不保證所有套件與設定相容 |
+| RHEL、Rocky Linux、AlmaLinux、Alpine、Arch Linux | ❌ 不支援 | 套件管理、服務管理或設定路徑不同 |
+| Windows、macOS | ❌ 不支援 | 監控程式與安裝器依賴 Linux 系統介面 |
 
 一條龍安裝器需要 `apt`、systemd、`/proc`、root 權限及可使用的 Docker
 環境。目前面向一般 `x86_64` 或 `arm64` Linux VPS；容器內執行、
@@ -30,7 +30,7 @@ Home Assistant 儀表板與 Companion App 推播。
 正式支援的平台會優先處理可重現的相容性問題。實驗性支援代表核心
 架構可運行，但部署前仍建議先建立 VPS 快照或備份。
 
-## 快速開始
+## 🚀 快速開始
 
 如果要把 Mosquitto、Home Assistant 與 VPS Monitor 全部部署在同一台
 Ubuntu VPS，只要複製並執行這一行：
@@ -41,11 +41,11 @@ git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && cd vps-s
 
 安裝器會以中文引導，並自動完成：
 
-- 安裝 Tailscale、Mosquitto、Docker、Home Assistant 與 VPS Monitor。
-- 產生兩組不同的 MQTT 高強度密碼。
-- 將 MQTT 限制在 `127.0.0.1`，不公開至網際網路。
-- 備份既有 Mosquitto 設定並保留 Home Assistant 資料。
-- 設定開機自動啟動並逐項檢查服務。
+- ✅ 安裝 Tailscale、Mosquitto、Docker、Home Assistant 與 VPS Monitor。
+- ✅ 產生兩組不同的 MQTT 高強度密碼。
+- ✅ 將 MQTT 限制在 `127.0.0.1`，不公開至網際網路。
+- ✅ 備份既有 Mosquitto 設定並保留 Home Assistant 資料。
+- ✅ 設定開機自動啟動並逐項檢查服務。
 
 過程中只需要選擇「VPS 顯示名稱」與「資源模式」。全新 VPS 需在
 瀏覽器授權一次 Tailscale；安裝完成後，再依畫面提示建立 Home Assistant
@@ -53,7 +53,7 @@ git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && cd vps-s
 
 > 安裝器不修改 UFW、雲端防火牆或 3X-UI 連接埠。
 
-## 可以監控什麼
+## 📊 可以監控什麼
 
 Home Assistant 會自動建立以下資訊：
 
@@ -75,7 +75,7 @@ Home Assistant 會自動建立以下資訊：
 
 告警門檻都能在環境檔中調整，不需要修改程式。
 
-## 接到既有的 Home Assistant
+## 🔌 接到既有的 Home Assistant
 
 如果 Home Assistant、Mosquitto 與本監控程式都部署在同一台 Ubuntu
 VPS，可參考完整中文指南：
@@ -90,7 +90,7 @@ VPS 必須能主動連到 broker；不需要把 VPS 的任何連接埠公開到�
 若 broker 不在 VPN / 私網內，務必使用 TLS，不要將未加密的 1883
 直接開放到公網。
 
-## 只安裝 VPS Monitor
+## 🛠️ 只安裝 VPS Monitor
 
 如果已經有可用的 Home Assistant 與 MQTT broker，只需要安裝監控程式：
 
@@ -131,7 +131,7 @@ journalctl -u vps-monitor -f
 
 成功後，Home Assistant 的 MQTT 整合下會自動出現 VPS 裝置。
 
-## 選配：加入 HomeKit
+## 🍎 選配：加入 HomeKit
 
 > [!IMPORTANT]
 > HomeKit 是選配功能，不影響 Home Assistant 儀表板與手機推播。
@@ -162,7 +162,7 @@ homekit: !include vps_homekit.yaml
 > 實體 ID 是首次建立時決定的。如果名稱曾被占用，Home Assistant
 > 可能加上 `_2`；此時請依 UI 中的實際實體 ID 修改 YAML。
 
-## 測試告警
+## ✅ 測試告警
 
 可安全地停止監控程式測試離線狀態：
 
@@ -180,14 +180,14 @@ sudo systemctl start vps-monitor
 自動化與活動通知。沒有家庭中樞時，請使用 Home Assistant 自動化搭配
 Companion App 推播。
 
-## 安全性
+## 🔒 安全性
 
 - 不要將未加密的 MQTT `1883` 連接埠公開至網際網路。
 - 帳密只會儲存在 VPS 本機的 root-only 設定檔，不應提交至 Git。
 - 正式環境執行前，建議先閱讀 [安全政策](SECURITY.md)。
 - 發現安全問題時，請勿建立公開 Issue；請依安全政策私下回報。
 
-## 授權與貢獻
+## 🤝 授權與貢獻
 
 本專案採用 [MIT License](LICENSE)。歡迎回報問題、改善文件或協助測試
 其他平台；提交變更前請先閱讀 [貢獻指南](CONTRIBUTING.md)。
