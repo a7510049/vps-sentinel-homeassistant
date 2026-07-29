@@ -7,7 +7,7 @@ Discovery，自動把 CPU、記憶體、磁碟、服務與 Docker 狀態加入
 Home Assistant，讓你用熟悉的儀表板查看主機狀況，並在異常時收到通知。
 
 整套系統以安全預設值與低資源占用為設計重點，適合免費或小型 VPS。
-HomeKit 整合則保留為選配功能；即使沒有 HomePod 或 Apple TV，也不影響
+HomeKit 整合則保留為選配功能。即使沒有 HomePod 或 Apple TV，也不影響
 Home Assistant 儀表板與 Companion App 推播。
 
 ## 🧩 支援環境
@@ -17,14 +17,14 @@ Home Assistant 儀表板與 Companion App 推播。
 
 | 平台 | 支援等級 | 說明 |
 | --- | --- | --- |
-| Ubuntu 22.04 LTS、24.04 LTS | ✅ 正式支援 | 建議使用；安裝流程與文件均以此環境為基準 |
+| Ubuntu 22.04 LTS、24.04 LTS | ✅ 正式支援 | 建議使用，安裝流程與文件均以此環境為基準 |
 | Debian 12、13 | 🧪 實驗性支援 | 核心架構相容，但不同套件版本可能需要個別調整 |
 | 其他 Ubuntu／Debian 版本 | ⚠️ 盡力支援 | 安裝器可嘗試執行，但不保證所有套件與設定相容 |
 | RHEL、Rocky Linux、AlmaLinux、Alpine、Arch Linux | ❌ 不支援 | 套件管理、服務管理或設定路徑不同 |
 | Windows、macOS | ❌ 不支援 | 監控程式與安裝器依賴 Linux 系統介面 |
 
 一條龍安裝器需要 `apt`、systemd、`/proc`、root 權限及可使用的 Docker
-環境。目前面向一般 `x86_64` 或 `arm64` Linux VPS；容器內執行、
+環境，目前面向一般 `x86_64` 或 `arm64` Linux VPS。容器內執行、
 精簡映像、WSL 及已停止安全維護的作業系統不在支援範圍內。
 
 正式支援的平台會優先處理可重現的相容性問題。實驗性支援代表核心
@@ -48,7 +48,7 @@ git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && cd vps-s
 - ✅ 設定開機自動啟動並逐項檢查服務。
 
 過程中只需要選擇「VPS 顯示名稱」與「資源模式」。全新 VPS 需在
-瀏覽器授權一次 Tailscale；安裝完成後，再依畫面提示建立 Home Assistant
+瀏覽器授權一次 Tailscale。安裝完成後，再依畫面提示建立 Home Assistant
 管理員並加入 MQTT 整合即可。
 
 > 安裝器不修改 UFW、雲端防火牆或 3X-UI 連接埠。
@@ -62,7 +62,7 @@ Home Assistant 會自動建立以下資訊：
 - 開機時間與運行時間
 - 網路上傳／下載速率
 - 可安裝安全更新數量
-- Docker 運行中、異常容器數（主機有 Docker 時）
+- Docker 運行中與異常容器數，主機已安裝 Docker 時才會顯示
 
 可用於自動化與通知的狀態：
 
@@ -86,7 +86,7 @@ VPS，可參考完整中文指南：
 Assistant OS，可安裝官方 Mosquitto broker 附加元件，並建立一個專用
 MQTT 使用者。記下 broker 的區網位址、連接埠、帳號及密碼。
 
-VPS 必須能主動連到 broker；不需要把 VPS 的任何連接埠公開到網際網路。
+VPS 必須能主動連到 broker，但不需要把 VPS 的任何連接埠公開到網際網路。
 若 broker 不在 VPN / 私網內，務必使用 TLS，不要將未加密的 1883
 直接開放到公網。
 
@@ -104,7 +104,7 @@ git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && sudo bas
 1. 安裝 Python、虛擬環境與 CA 憑證。
 2. 以權限 `600` 建立 `/etc/vps-monitor.env`。
 3. 安裝並啟用 `vps-monitor.service`。
-4. 檢查服務；失敗時直接顯示最近 30 行日誌。
+4. 檢查服務，失敗時直接顯示最近 30 行日誌。
 
 重新執行安裝器時，可以沿用現有設定，或先自動備份再重新設定。
 
@@ -118,8 +118,9 @@ git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && sudo bas
 
 不論選擇哪個模式，MQTT 都維持長連線，因此 VPS 或監控程式斷線時，
 仍會透過 Last Will 立即更新「連線狀態」。
+
 若 Mosquitto 因更新或重新啟動而短暫中斷，監控程式會在背景以最長
-5 分鐘的退避間隔持續重連，不會退出或形成快速重啟循環；重新連線後
+5 分鐘的退避間隔持續重連，不會退出或形成快速重啟循環。重新連線後
 會自動恢復 Discovery、上線狀態與數值回報。
 
 手動檢查：
@@ -136,7 +137,7 @@ journalctl -u vps-monitor -f
 > [!IMPORTANT]
 > HomeKit 是選配功能，不影響 Home Assistant 儀表板與手機推播。
 > iPhone 必須能在相同區域網路找到 Home Assistant Bridge 才能完成
-> 初次配對；Tailscale 通常不會轉送 HomeKit 使用的 mDNS 廣播。若
+> 初次配對。Tailscale 通常不會轉送 HomeKit 使用的 mDNS 廣播。若
 > Home Assistant 位於遠端 VPS，可能需要額外配置 mDNS reflector 與
 > `advertise_ip`，本安裝器不會自動變更這類網路設定。
 >
@@ -156,11 +157,11 @@ homekit: !include vps_homekit.yaml
 
 重新啟動 Home Assistant，從通知取得配對碼，於 Apple「家庭」加入
 「Home Assistant VPS」橋接器。若你已用 UI 建立 HomeKit Bridge，
-不要再建立 YAML bridge；改到該 bridge 的「設定」中，選取下列五個
+不要再建立 YAML bridge。請改到該 bridge 的「設定」中，選取下列五個
 `binary_sensor.vps_*` 實體即可。
 
 > 實體 ID 是首次建立時決定的。如果名稱曾被占用，Home Assistant
-> 可能加上 `_2`；此時請依 UI 中的實際實體 ID 修改 YAML。
+> 可能加上 `_2`。此時請依 UI 中的實際實體 ID 修改 YAML。
 
 ## ✅ 測試告警
 
@@ -183,11 +184,11 @@ Companion App 推播。
 ## 🔒 安全性
 
 - 不要將未加密的 MQTT `1883` 連接埠公開至網際網路。
-- 帳密只會儲存在 VPS 本機的 root-only 設定檔，不應提交至 Git。
+- 帳密只會儲存在 VPS 本機、僅限 root 讀取的設定檔，不應提交至 Git。
 - 正式環境執行前，建議先閱讀 [安全政策](SECURITY.md)。
-- 發現安全問題時，請勿建立公開 Issue；請依安全政策私下回報。
+- 發現安全問題時，請勿建立公開 Issue。請依安全政策私下回報。
 
 ## 🤝 授權與貢獻
 
 本專案採用 [MIT License](LICENSE)。歡迎回報問題、改善文件或協助測試
-其他平台；提交變更前請先閱讀 [貢獻指南](CONTRIBUTING.md)。
+其他平台。提交變更前請先閱讀 [貢獻指南](CONTRIBUTING.md)。
