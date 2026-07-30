@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.9.2";
+const CARD_VERSION = "0.9.3";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -267,9 +267,7 @@ class VpsSentinelAppleCard extends HTMLElement {
         }
         .insight:active,
         .insight.pressing {
-          transform: scale(.965);
-          border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-          background: color-mix(in srgb, var(--accent) 20%, transparent);
+          transform: scale(.975);
         }
         }
         .insight-label {
@@ -379,32 +377,44 @@ class VpsSentinelAppleCard extends HTMLElement {
           display: none;
         }
         .maintenance-progress {
-          display: none;
+          display: block;
           overflow: hidden;
           position: relative;
-          height: 30px;
-          margin-bottom: 10px;
+          max-height: 0;
+          margin: 0;
+          opacity: 0;
+          transform: translateY(-5px) scale(.985);
           border: 1px solid color-mix(in srgb, var(--progress-color, var(--vs-blue)) 24%, transparent);
-          border-radius: 11px;
+          border-radius: 999px;
           background: color-mix(in srgb, var(--progress-color, var(--vs-blue)) 8%, transparent);
           color: var(--primary-text-color);
+          pointer-events: none;
+          transition: max-height .28s ease, margin .28s ease, opacity .24s ease, transform .28s cubic-bezier(.22, 1, .36, 1);
         }
-        .maintenance-progress.visible { display: block; }
+        .maintenance-progress.visible {
+          max-height: 32px;
+          margin-bottom: 10px;
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
         .maintenance-progress-fill {
           width: var(--progress, 0%);
-          height: 100%;
+          height: 32px;
           border-radius: inherit;
           background: linear-gradient(90deg, color-mix(in srgb, var(--progress-color) 84%, transparent), color-mix(in srgb, var(--progress-color) 36%, transparent));
-          transition: width .45s cubic-bezier(.22, 1, .36, 1), background .3s ease;
+          transition: width .45s cubic-bezier(.22, 1, .36, 1), background .3s ease, opacity .25s ease;
         }
         .maintenance-progress.sending .maintenance-progress-fill,
         .maintenance-progress.running .maintenance-progress-fill {
-          width: 38%;
-          animation: vs-maintenance-progress 1.25s ease-in-out infinite;
+          width: 100%;
+          opacity: .72;
+          background: linear-gradient(105deg, color-mix(in srgb, var(--progress-color) 26%, transparent) 20%, color-mix(in srgb, var(--progress-color) 86%, transparent) 48%, color-mix(in srgb, var(--progress-color) 26%, transparent) 76%);
+          background-size: 220% 100%;
+          animation: vs-maintenance-shimmer 1.8s ease-in-out infinite;
         }
-        @keyframes vs-maintenance-progress {
-          0% { transform: translateX(-120%); }
-          100% { transform: translateX(290%); }
+        @keyframes vs-maintenance-shimmer {
+          0% { background-position: 150% 0; }
+          100% { background-position: -70% 0; }
         }
         .maintenance-progress-label {
           position: absolute;
@@ -759,15 +769,26 @@ class VpsSentinelAppleCard extends HTMLElement {
       const progressAction = backendState === "idle" && localState
         ? localState.action
         : action;
+      const cooldownRemaining = backendState === "idle" && localState
+        ? undefined
+        : maintenanceEntity.attributes?.remaining_seconds;
       const displayState = this._maintenanceDisplayState(
         state,
         progressAction,
         maintenanceEntity.attributes?.updated_at,
+        cooldownRemaining,
+        progressMessage,
       );
       const busy = displayState === "running" || displayState === "sending";
       this._setMaintenanceProgress(
         displayState,
-        this._maintenanceMessage(displayState, progressAction, progressMessage),
+        this._maintenanceMessage(
+          displayState,
+          progressAction,
+          progressMessage,
+          cooldownRemaining,
+          maintenanceEntity.attributes?.updated_at,
+        ),
       );
       for (const button of maintenance.querySelectorAll(".action")) {
         button.disabled = busy;
@@ -776,12 +797,22 @@ class VpsSentinelAppleCard extends HTMLElement {
     }
   }
 
-  _maintenanceDisplayState(state, action, updatedAt) {
+  _maintenanceDisplayState(state, action, updatedAt, remainingSeconds, message) {
     const temporary = new Set([
       "success", "scheduled", "failed", "rejected", "cooldown", "busy",
     ]);
     if (!temporary.has(state)) return state;
     const key = `${state}:${action || "none"}:${updatedAt || "local"}`;
+    if (state === "cooldown") {
+      const remaining = this._cooldownSecondsRemaining(
+        remainingSeconds,
+        updatedAt,
+        message,
+      );
+      if (remaining <= 0) return "idle";
+      this._scheduleCooldownUpdate(key, remaining);
+      if (remaining <= 5) return "cooldown";
+    }
     if (this._dismissedMaintenanceEvent === key) return "idle";
     if (this._maintenanceDismissTimerKey !== key) {
       clearTimeout(this._maintenanceDismissTimer);
@@ -795,7 +826,29 @@ class VpsSentinelAppleCard extends HTMLElement {
     return state;
   }
 
-  _maintenanceMessage(state, action, message) {
+  _cooldownSecondsRemaining(remainingSeconds, updatedAt, message) {
+    const fallback = String(message || "").match(/(\d+)\s*秒/)?.[1];
+    const initial = Number(remainingSeconds ?? fallback);
+    if (!Number.isFinite(initial) || initial <= 0) return 0;
+    const updatedAtMs = Date.parse(updatedAt || "");
+    const elapsedSeconds = Number.isFinite(updatedAtMs)
+      ? Math.max(0, (Date.now() - updatedAtMs) / 1000)
+      : 0;
+    return Math.max(0, Math.ceil(initial - elapsedSeconds));
+  }
+
+  _scheduleCooldownUpdate(key, remaining) {
+    if (this._cooldownTimerKey === key) return;
+    clearTimeout(this._cooldownTimer);
+    this._cooldownTimerKey = key;
+    const delay = remaining > 5 ? (remaining - 5) * 1000 : 1000;
+    this._cooldownTimer = setTimeout(() => {
+      this._cooldownTimerKey = null;
+      this._update();
+    }, Math.max(250, delay));
+  }
+
+  _maintenanceMessage(state, action, message, remainingSeconds, updatedAt) {
     const name = {
       refresh: "檢查更新",
       security_update: "安全更新",
@@ -807,8 +860,12 @@ class VpsSentinelAppleCard extends HTMLElement {
     if (state === "scheduled") return message || "已安排重新啟動";
     if (state === "failed") return `${name}未完成：${message || "請稍後再試"}`;
     if (state === "cooldown") {
-      const seconds = String(message || "").match(/(\d+)\s*秒/)?.[1];
-      return seconds
+      const seconds = this._cooldownSecondsRemaining(
+        remainingSeconds,
+        updatedAt,
+        message,
+      );
+      return seconds > 0
         ? `「${name}」可在 ${seconds} 秒後再次執行`
         : `「${name}」正在冷卻，請稍後再試`;
     }

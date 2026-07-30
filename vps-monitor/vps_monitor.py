@@ -218,13 +218,15 @@ class MaintenanceController:
         self.busy = False
         self.last_started = {}
 
-    def publish(self, state, action="none", message=""):
+    def publish(self, state, action="none", message="", remaining_seconds=None):
         payload = {
             "state": state,
             "action": action,
             "message": message,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
+        if remaining_seconds is not None:
+            payload["remaining_seconds"] = remaining_seconds
         self.client.publish(
             MAINTENANCE_STATE,
             json.dumps(payload, ensure_ascii=False),
@@ -284,6 +286,7 @@ class MaintenanceController:
                     "cooldown",
                     action,
                     f"{action} 操作冷卻中，約 {remaining} 秒後可再次執行",
+                    remaining,
                 )
                 return False
             self.busy = True
