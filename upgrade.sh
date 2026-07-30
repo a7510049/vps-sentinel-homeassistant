@@ -42,6 +42,16 @@ if [[ ! -f /etc/vps-monitor.env ||
   exit 1
 fi
 
+printf '\033[1;35m'
+cat <<'BANNER'
+╭────────────────────────────────────────╮
+│  🔄 VPS Sentinel 安全更新              │
+╰────────────────────────────────────────╯
+BANNER
+printf '\033[0m'
+echo "更新前會檢查版本與檔案，服務異常時自動回復。"
+echo
+
 temporary="$(mktemp -d)"
 cleanup() {
   rm -rf -- "${temporary}"
@@ -210,11 +220,22 @@ trap - ERR
 
 mapfile -t old_backups < <(
   find "${BACKUP_ROOT}" -mindepth 1 -maxdepth 1 -type d \
-    -printf '%T@ %p\n' | sort -rn | tail -n +4 | cut -d' ' -f2-
+    -printf '%T@ %p\n' | sort -rn | tail -n +2 | cut -d' ' -f2-
 )
+cleanup_ok=true
 for old_backup in "${old_backups[@]}"; do
   case "${old_backup}" in
-    "${BACKUP_ROOT}/"*) rm -rf -- "${old_backup}" ;;
+    "${BACKUP_ROOT}/"*)
+      if ! rm -rf -- "${old_backup}"; then
+        cleanup_ok=false
+        yellow "無法清理舊版備份：${old_backup}"
+      fi
+      ;;
   esac
 done
 green "VPS Sentinel 已安全升級至 ${latest_version}"
+if [[ "${cleanup_ok}" == "true" ]]; then
+  green "舊版暫存已清理，僅保留最近一份回復備份"
+else
+  yellow "升級已完成，但部分舊版備份需要稍後手動清理"
+fi

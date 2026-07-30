@@ -176,13 +176,13 @@ run_checks() {
 safe_repairs() {
   local choice
   heading "安全修復"
-  echo "  1) 修正監控設定檔權限"
-  echo "  2) 重新載入並啟動 VPS Sentinel"
-  echo "  3) 驗證後重新啟動 Home Assistant"
-  echo "  4) 重新啟動 Mosquitto"
-  echo "  0) 返回"
-  read -r -p "請選擇：" choice
-  case "${choice}" in
+  echo "  1. 修正監控設定檔權限"
+  echo "  2. 重新載入並啟動 VPS Sentinel"
+  echo "  3. 驗證後重新啟動 Home Assistant"
+  echo "  4. 重新啟動 Mosquitto"
+  echo "  0. 返回上一層"
+  read -r -p "請選擇 [0]：" choice
+  case "${choice:-0}" in
     1)
       if [[ -f "${ENV_FILE}" ]]; then
         chown root:root "${ENV_FILE}"
@@ -256,19 +256,21 @@ while true; do
   clear
   printf '\033[1;35m'
   cat <<'BANNER'
-========================================================
- VPS Sentinel 健康檢查
-========================================================
+╭────────────────────────────────────────╮
+│  🩺 VPS Sentinel 健康檢查              │
+╰────────────────────────────────────────╯
 BANNER
   printf '\033[0m'
   run_checks
   echo
-  echo "  1) 執行安全修復"
-  echo "  2) 建立匿名診斷報告"
-  echo "  3) 重新檢查"
-  echo "  0) 返回"
-  read -r -p "請選擇：" choice
-  case "${choice}" in
+  echo "接下來可以："
+  echo
+  echo "  1. 執行安全修復"
+  echo "  2. 建立匿名診斷報告"
+  echo "  3. 重新檢查"
+  echo "  0. 返回上一層"
+  read -r -p "請選擇 [0]：" choice
+  case "${choice:-0}" in
     1) safe_repairs ;;
     2) write_report ;;
     3) continue ;;
@@ -276,5 +278,5 @@ BANNER
     *) yellow "請輸入 0 到 3。" ;;
   esac
   echo
-  read -r -p "按 Enter 繼續……" _
+  read -r -p "按 Enter 返回健康檢查……" _
 done

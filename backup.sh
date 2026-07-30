@@ -116,10 +116,11 @@ restore_backup() {
   fi
   heading "選擇備份"
   for index in "${!archives[@]}"; do
-    printf '  %d) %s\n' "$((index + 1))" "$(basename "${archives[index]}")"
+    printf '  %d. %s\n' "$((index + 1))" "$(basename "${archives[index]}")"
   done
-  echo "  0) 取消"
-  read -r -p "請選擇：" choice
+  echo "  0. 取消並返回"
+  read -r -p "請選擇 [0]：" choice
+  choice="${choice:-0}"
   [[ "${choice}" =~ ^[0-9]+$ ]] || {
     yellow "請輸入清單中的數字。"
     return
@@ -200,18 +201,18 @@ while true; do
   clear
   printf '\033[1;35m'
   cat <<'BANNER'
-========================================================
- VPS Sentinel 備份管理
-========================================================
+╭────────────────────────────────────────╮
+│  💾 VPS Sentinel 備份與還原            │
+╰────────────────────────────────────────╯
 BANNER
   printf '\033[0m'
-  echo "  1) 查看設定備份"
-  echo "  2) 建立設定備份"
-  echo "  3) 還原設定備份"
-  echo "  4) 清理舊備份"
-  echo "  0) 返回"
-  read -r -p "請選擇：" choice
-  case "${choice}" in
+  echo "  1. 查看現有備份"
+  echo "  2. 建立設定備份"
+  echo "  3. 還原設定備份"
+  echo "  4. 清理舊備份"
+  echo "  0. 返回上一層"
+  read -r -p "請選擇 [0]：" choice
+  case "${choice:-0}" in
     1) list_backups ;;
     2) create_backup ;;
     3) restore_backup ;;
@@ -220,5 +221,5 @@ BANNER
     *) yellow "請輸入 0 到 4。" ;;
   esac
   echo
-  read -r -p "按 Enter 繼續……" _
+  read -r -p "按 Enter 返回備份管理……" _
 done

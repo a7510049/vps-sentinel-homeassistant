@@ -227,19 +227,23 @@ remove_unused_packages() {
 clear
 printf '\033[1;35m'
 cat <<'BANNER'
-========================================================
- VPS Sentinel 中文移除工具
-========================================================
+╭────────────────────────────────────────╮
+│  🧹 VPS Sentinel 移除工具              │
+╰────────────────────────────────────────╯
 BANNER
 printf '\033[0m'
 echo
 echo "請選擇移除範圍："
-echo "  1) 只移除 VPS Monitor（保留 Home Assistant 與 MQTT）"
-echo "  2) 完整移除本專案建立的環境與資料"
-echo "  3) 取消"
+echo "  1. 只移除監控服務"
+echo "     保留 Home Assistant、MQTT 與 Tailscale"
 echo
-read -r -p "請選擇 [1]：" choice
-choice="${choice:-1}"
+echo "  2. 完整移除 VPS Sentinel"
+echo "     包含本專案建立的設定、歷史資料與自動備份"
+echo
+echo "  0. 取消並返回"
+echo
+read -r -p "請選擇 [0]：" choice
+choice="${choice:-0}"
 
 case "${choice}" in
   1)
@@ -283,11 +287,11 @@ case "${choice}" in
     [[ "${keep_backup}" == "true" ]] && \
       echo "需要復原時，請使用上方顯示的最終備份。"
     ;;
-  3)
+  0)
     echo "已取消，沒有刪除任何資料。"
     ;;
   *)
-    red "請選擇 1、2 或 3。"
+    red "請選擇 0、1 或 2。"
     exit 1
     ;;
 esac

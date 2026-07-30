@@ -11,21 +11,28 @@ readonly UPGRADE_COMMAND="/usr/local/sbin/vps-sentinel-upgrade"
 readonly DOCTOR_COMMAND="/usr/local/sbin/vps-sentinel-doctor"
 readonly BACKUP_COMMAND="/usr/local/sbin/vps-sentinel-backup"
 readonly AUTOMATIONS_COMMAND="/usr/local/sbin/vps-sentinel-automations"
+readonly VERSION_FILE="/opt/vps-monitor/.version"
 
-green()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
-yellow() { printf '\033[1;33m⚠ %s\033[0m\n' "$*"; }
-red()    { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; }
-heading(){ printf '\n\033[1;36m%s\033[0m\n' "$*"; }
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  readonly C_RESET=$'\033[0m'
+  readonly C_CYAN=$'\033[1;36m'
+  readonly C_GREEN=$'\033[1;32m'
+  readonly C_YELLOW=$'\033[1;33m'
+  readonly C_RED=$'\033[1;31m'
+  readonly C_PURPLE=$'\033[1;35m'
+else
+  readonly C_RESET="" C_CYAN="" C_GREEN="" C_YELLOW="" C_RED="" C_PURPLE=""
+fi
+
+green()  { printf '%s✅ %s%s\n' "${C_GREEN}" "$*" "${C_RESET}"; }
+yellow() { printf '%s⚠️  %s%s\n' "${C_YELLOW}" "$*" "${C_RESET}"; }
+red()    { printf '%s❌ %s%s\n' "${C_RED}" "$*" "${C_RESET}" >&2; }
+heading(){ printf '\n%s%s%s\n' "${C_CYAN}" "$*" "${C_RESET}"; }
 
 if [[ ${EUID} -ne 0 ]]; then
   red "請使用 sudo：sudo vps-sentinel"
   exit 1
 fi
-if [[ ! -t 0 ]]; then
-  red "維護中心只能在互動式終端機執行。"
-  exit 1
-fi
-
 read_env() {
   local key="$1" fallback="${2-}" value
   value="$(sed -n "s/^${key}=//p" "${ENV_FILE}" 2>/dev/null | tail -n 1)"
@@ -84,6 +91,50 @@ show_status() {
     else
       yellow "Tailscale：${state:-無法讀取}"
     fi
+  fi
+}
+
+service_state() {
+  local service="$1"
+  if systemctl is-active --quiet "${service}" 2>/dev/null; then
+    printf '正常'
+  else
+    printf '需檢查'
+  fi
+}
+
+show_header() {
+  local version
+  version="$(cat "${VERSION_FILE}" 2>/dev/null || printf '開發版')"
+  clear
+  printf '%s' "${C_PURPLE}"
+  cat <<'BANNER'
+╭────────────────────────────────────────╮
+│  🖥️  VPS Sentinel                     │
+│  輕量、安心的 VPS 狀態監控             │
+╰────────────────────────────────────────╯
+BANNER
+  printf '%s' "${C_RESET}"
+  printf '  版本 %-10s  監控 %-8s  MQTT %s\n' \
+    "${version}" "$(service_state vps-monitor)" "$(service_state mosquitto)"
+  echo
+}
+
+pause_menu() {
+  [[ -t 0 ]] || return 0
+  echo
+  read -r -p "按 Enter 返回……" _
+}
+
+run_tool() {
+  local label="$1" command="$2"
+  if [[ ! -x "${command}" ]]; then
+    yellow "找不到${label}，請先執行 VPS Sentinel 更新。"
+    return 1
+  fi
+  if ! "${command}"; then
+    red "${label}未完成，請查看上方訊息。"
+    return 1
   fi
 }
 
@@ -327,80 +378,144 @@ YAML
   green "VPS Sentinel 儀表板已加入側邊欄"
 }
 
-while true; do
-  clear
-  printf '\033[1;35m'
-  cat <<'BANNER'
-========================================================
- VPS Sentinel 維護中心
-========================================================
-BANNER
-  printf '\033[0m'
-  echo "  1) 查看服務狀態"
-  echo "  2) 查看目前設定"
-  echo "  3) 切換資源模式"
-  echo "  4) 調整告警門檻"
-  echo "  5) 建立或更新儀表板"
-  echo "  6) Home Assistant 自動化模板"
-  echo "  7) 一鍵健康檢查與修復"
-  echo "  8) 備份與還原"
-  echo "  9) 更新 VPS Sentinel"
-  echo " 10) 安全更新 Home Assistant"
-  echo " 11) 移除 VPS Sentinel"
-  echo "  0) 離開"
-  echo
-  read -r -p "請選擇：" choice
-  case "${choice}" in
-    1) show_status ;;
-    2) show_settings ;;
-    3) change_profile ;;
-    4) change_thresholds ;;
-    5) install_dashboard ;;
-    6)
-      if [[ -x "${AUTOMATIONS_COMMAND}" ]]; then
-        "${AUTOMATIONS_COMMAND}"
-      else
-        yellow "找不到自動化模板工具"
-      fi
+settings_menu() {
+  local choice
+  while true; do
+    show_header
+    heading "⚙️  監控設定"
+    echo "  1. 查看目前設定"
+    echo "  2. 切換資源模式"
+    echo "  3. 調整告警門檻"
+    echo "  0. 返回主選單"
+    echo
+    read -r -p "請選擇 [0]：" choice
+    case "${choice:-0}" in
+      1) show_settings; pause_menu ;;
+      2) change_profile; pause_menu ;;
+      3) change_thresholds; pause_menu ;;
+      0) return ;;
+      *) yellow "請輸入 0 到 3。"; pause_menu ;;
+    esac
+  done
+}
+
+home_assistant_menu() {
+  local choice
+  while true; do
+    show_header
+    heading "🏠 Home Assistant"
+    echo "  1. 建立或更新監控面板"
+    echo "  2. 管理通知與自動化模板"
+    echo "  3. 安全更新 Home Assistant"
+    echo "  0. 返回主選單"
+    echo
+    read -r -p "請選擇 [0]：" choice
+    case "${choice:-0}" in
+      1) install_dashboard; pause_menu ;;
+      2) run_tool "自動化模板工具" "${AUTOMATIONS_COMMAND}" || true; pause_menu ;;
+      3) run_tool "Home Assistant 更新" "${UPDATE_COMMAND}" || true; pause_menu ;;
+      0) return ;;
+      *) yellow "請輸入 0 到 3。"; pause_menu ;;
+    esac
+  done
+}
+
+maintenance_menu() {
+  local choice
+  while true; do
+    show_header
+    heading "🧰 系統維護"
+    echo "  1. 執行健康檢查與修復"
+    echo "  2. 備份與還原"
+    echo "  3. 更新 VPS Sentinel"
+    echo "  4. 完整移除"
+    echo "  0. 返回主選單"
+    echo
+    read -r -p "請選擇 [0]：" choice
+    case "${choice:-0}" in
+      1) run_tool "健康檢查" "${DOCTOR_COMMAND}" || true; pause_menu ;;
+      2) run_tool "備份管理" "${BACKUP_COMMAND}" || true; pause_menu ;;
+      3) run_tool "VPS Sentinel 更新" "${UPGRADE_COMMAND}" || true; pause_menu ;;
+      4)
+        yellow "下一步會進入移除工具，實際刪除前仍會再次確認。"
+        run_tool "移除工具" "${UNINSTALL_COMMAND}" || true
+        pause_menu
+        ;;
+      0) return ;;
+      *) yellow "請輸入 0 到 4。"; pause_menu ;;
+    esac
+  done
+}
+
+print_help() {
+  cat <<'HELP'
+用法：sudo vps-sentinel [指令]
+
+未指定指令時開啟中文維護中心。
+
+指令：
+  status       查看服務狀態
+  settings     查看目前監控設定
+  dashboard    建立或更新 Home Assistant 監控面板
+  doctor       執行健康檢查
+  backup       開啟備份與還原工具
+  upgrade      更新 VPS Sentinel
+  ha-update    更新 Home Assistant
+  help         顯示這份說明
+HELP
+}
+
+run_command() {
+  case "${1}" in
+    status) show_status ;;
+    settings) show_settings ;;
+    dashboard) install_dashboard ;;
+    doctor) run_tool "健康檢查" "${DOCTOR_COMMAND}" ;;
+    backup) run_tool "備份管理" "${BACKUP_COMMAND}" ;;
+    upgrade) run_tool "VPS Sentinel 更新" "${UPGRADE_COMMAND}" ;;
+    ha-update) run_tool "Home Assistant 更新" "${UPDATE_COMMAND}" ;;
+    help|-h|--help) print_help ;;
+    *)
+      red "未知指令：${1}"
+      print_help
+      return 2
       ;;
-    7)
-      if [[ -x "${DOCTOR_COMMAND}" ]]; then
-        "${DOCTOR_COMMAND}"
-      else
-        yellow "找不到健康檢查工具"
-      fi
-      ;;
-    8)
-      if [[ -x "${BACKUP_COMMAND}" ]]; then
-        "${BACKUP_COMMAND}"
-      else
-        yellow "找不到備份管理工具"
-      fi
-      ;;
-    9)
-      if [[ -x "${UPGRADE_COMMAND}" ]]; then
-        "${UPGRADE_COMMAND}"
-      else
-        yellow "找不到 VPS Sentinel 升級工具"
-      fi
-      ;;
-    10)
-      if [[ -x "${UPDATE_COMMAND}" ]]; then
-        "${UPDATE_COMMAND}"
-      else
-        yellow "找不到 Home Assistant 更新工具"
-      fi
-      ;;
-    11)
-      if [[ -x "${UNINSTALL_COMMAND}" ]]; then
-        "${UNINSTALL_COMMAND}"
-      else
-        yellow "找不到移除工具"
-      fi
-      ;;
-    0) exit 0 ;;
-    *) yellow "請輸入 0 到 11。" ;;
   esac
-  echo
-  read -r -p "按 Enter 返回主選單……" _
-done
+}
+
+main_menu() {
+  local choice
+  if [[ ! -t 0 ]]; then
+    red "互動式維護中心需要終端機；自動化操作請使用 vps-sentinel help。"
+    return 1
+  fi
+  while true; do
+    show_header
+    echo "請選擇要進行的操作："
+    echo
+    echo "  1. 📊 查看系統狀態"
+    echo "  2. ⚙️  調整監控設定"
+    echo "  3. 🏠 管理 Home Assistant"
+    echo "  4. 🧰 系統維護"
+    echo "  0. 離開"
+    echo
+    read -r -p "請選擇 [1]：" choice
+    case "${choice:-1}" in
+      1) show_status; pause_menu ;;
+      2) settings_menu ;;
+      3) home_assistant_menu ;;
+      4) maintenance_menu ;;
+      0)
+        echo "已離開 VPS Sentinel。"
+        return
+        ;;
+      *) yellow "請輸入 0 到 4。"; pause_menu ;;
+    esac
+  done
+}
+
+if (( $# > 0 )); then
+  run_command "$1"
+else
+  main_menu
+fi
