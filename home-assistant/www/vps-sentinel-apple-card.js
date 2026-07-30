@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.8.0-rc.2";
+const CARD_VERSION = "0.8.0-rc.4";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {

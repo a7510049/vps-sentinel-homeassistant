@@ -224,12 +224,12 @@ CPU、記憶體與磁碟使用同級動態長條，異常時才顯示醒目提�
 0.8 起另提供可選的 Apple 風格面板。它使用約 10 KB 的本機前端元件，
 不需要 HACS、額外主題，也不會建立新的 VPS 常駐程序；外觀會自動跟隨
 Home Assistant 的深色或淺色模式。安裝工具會透過官方
-`frontend.extra_module_url` 自動載入元件，不必手動新增儀表板資源。
-執行 `sudo vps-sentinel-apple` 即可安裝並套用。若要返回完全原生的
-穩定面板，執行 `sudo vps-sentinel dashboard` 即可。
+儀表板資源頁載入元件；第一次需要手動註冊 JavaScript 模組，後續更新
+不必重複新增。註冊後執行 `sudo vps-sentinel-apple --apply` 即可套用。
+若要返回完全原生的穩定面板，執行 `sudo vps-sentinel dashboard` 即可。
 工具會先備份 `configuration.yaml`，產生獨立的
 `vps-sentinel-dashboard.yaml`，通過 Home Assistant 設定檢查後才重新
-啟動；驗證或啟動失敗時會自動回復原設定。
+啟動；驗證或啟動失敗時會自動回復原設定。工具不直接修改 `.storage`。
 
 ## 🩺 健康檢查與安全修復
 

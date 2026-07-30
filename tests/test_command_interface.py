@@ -27,9 +27,10 @@ class CommandInterfaceTests(unittest.TestCase):
     def test_apple_dashboard_preserves_storage_and_native_fallback(self):
         self.assertEqual(APPLE_DASHBOARD.count(".storage"), 1)
         self.assertIn("sudo vps-sentinel dashboard", APPLE_DASHBOARD)
-        self.assertIn("frontend.extra_module_url", APPLE_DASHBOARD)
-        self.assertIn("register_frontend_module", APPLE_DASHBOARD)
-        self.assertNotIn("新增資源", APPLE_DASHBOARD)
+        self.assertIn("--apply", APPLE_DASHBOARD)
+        self.assertIn("新增一筆儀表板資源", APPLE_DASHBOARD)
+        self.assertIn("remove_legacy_auto_module", APPLE_DASHBOARD)
+        self.assertNotIn("register_frontend_module", APPLE_DASHBOARD)
 
     def test_apple_card_is_self_contained_and_responsive(self):
         self.assertIn("class VpsSentinelAppleCard", APPLE_CARD)

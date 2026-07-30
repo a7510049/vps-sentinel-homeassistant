@@ -7,16 +7,16 @@ readonly HA_CONFIG="${HA_DIR}/config/configuration.yaml"
 readonly DASHBOARD_FILE="${HA_DIR}/config/vps-sentinel-dashboard.yaml"
 readonly CARD_SOURCE="/opt/vps-monitor/vps-sentinel-apple-card.js"
 readonly CARD_TARGET="${HA_DIR}/config/www/vps-sentinel-apple-card.js"
-readonly RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.8.0-rc.3"
+readonly RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.8.0-rc.4"
 
 if [[ ${EUID} -ne 0 ]]; then
-  echo "❌ 請使用 sudo：sudo vps-sentinel-apple" >&2
+  echo "[錯誤] 請使用 sudo：sudo vps-sentinel-apple" >&2
   exit 1
 fi
 
 if [[ ! -f "${ENV_FILE}" || ! -f "${HA_CONFIG}" ||
       ! -f "${CARD_SOURCE}" ]]; then
-  echo "❌ Apple 面板元件尚未完整安裝。" >&2
+  echo "[錯誤] Apple 風格面板元件尚未完整安裝。" >&2
   exit 1
 fi
 
@@ -72,103 +72,81 @@ install_asset() {
         cd "${HA_DIR}"
         docker compose restart homeassistant
       ) || true
-      echo "❌ Home Assistant 未能在預期時間內恢復。" >&2
+      echo "[錯誤] Home Assistant 未能在預期時間內恢復。" >&2
       exit 1
     fi
     [[ -z "${card_backup}" ]] || rm -f -- "${card_backup}"
-    echo "✅ Apple 面板元件已安裝。"
+    echo "[完成] Apple 風格面板元件已安裝。"
   else
-    echo "✅ Apple 面板元件已是最新版本。"
+    echo "[完成] Apple 風格面板元件已是最新版本。"
   fi
 }
 
 show_resource_steps() {
-  echo "✅ Apple 面板元件已由 Home Assistant 自動載入。"
-  echo "程式使用官方 frontend.extra_module_url，不會修改 .storage。"
+  cat <<EOF
+
+首次使用請在 Home Assistant 新增一筆儀表板資源：
+  網址：${RESOURCE_URL}
+  類型：JavaScript 模組
+
+完成後執行：
+  sudo vps-sentinel-apple --apply
+
+這是 Home Assistant 官方支援且最穩定的註冊方式。
+程式不會直接修改 .storage。
+EOF
 }
 
-register_frontend_module() {
-  local backup temporary changed=false
-  if grep -Fq -- "${RESOURCE_URL}" "${HA_CONFIG}"; then
-    show_resource_steps
+remove_legacy_auto_module() {
+  local backup temporary
+  if ! grep -Eq '^[[:space:]]+- /local/vps-sentinel-apple-card\.js' \
+      "${HA_CONFIG}"; then
     return
   fi
 
   backup="$(mktemp)"
   temporary="$(mktemp)"
   cp -a "${HA_CONFIG}" "${backup}"
-
-  if grep -Eq '^[[:space:]]+- /local/vps-sentinel-apple-card\.js' \
-      "${HA_CONFIG}"; then
-    awk -v url="${RESOURCE_URL}" '
-      /^[[:space:]]+- \/local\/vps-sentinel-apple-card\.js/ && !done {
-        print "    - " url
-        done=1
-        next
-      }
-      { print }
-    ' "${HA_CONFIG}" > "${temporary}"
-  elif grep -Eq '^  extra_module_url:[[:space:]]*$' "${HA_CONFIG}"; then
-    awk -v url="${RESOURCE_URL}" '
-      !done && /^  extra_module_url:[[:space:]]*$/ {
+  awk '
+    /^  extra_module_url:[[:space:]]*$/ {
+      in_modules=1
+      key=$0
+      key_printed=0
+      next
+    }
+    in_modules && /^    - / {
+      if ($0 !~ /\/local\/vps-sentinel-apple-card\.js/) {
+        if (!key_printed) {
+          print key
+          key_printed=1
+        }
         print
-        print "    - " url
-        done=1
-        next
       }
-      { print }
-    ' "${HA_CONFIG}" > "${temporary}"
-  elif grep -Eq '^frontend:[[:space:]]*$' "${HA_CONFIG}"; then
-    awk -v url="${RESOURCE_URL}" '
-      !done && /^frontend:[[:space:]]*$/ {
-        print
-        print "  extra_module_url:"
-        print "    - " url
-        done=1
-        next
-      }
-      { print }
-    ' "${HA_CONFIG}" > "${temporary}"
-  else
-    cp -a "${HA_CONFIG}" "${temporary}"
-    printf '\nfrontend:\n  extra_module_url:\n    - %s\n' \
-      "${RESOURCE_URL}" >> "${temporary}"
-  fi
+      next
+    }
+    in_modules {
+      in_modules=0
+    }
+    { print }
+  ' "${HA_CONFIG}" > "${temporary}"
   install -m 0644 "${temporary}" "${HA_CONFIG}"
-  changed=true
 
   if ! docker exec homeassistant python -m homeassistant \
       --script check_config --config /config; then
     install -m 0644 "${backup}" "${HA_CONFIG}"
     rm -f -- "${backup}" "${temporary}"
-    echo "❌ 自動載入設定驗證失敗，已回復原設定。" >&2
+    echo "[錯誤] 舊版自動載入設定清理失敗，已回復原設定。" >&2
     exit 1
   fi
-  if [[ "${changed}" == "true" ]]; then
-    (
-      cd "${HA_DIR}"
-      docker compose restart homeassistant
-    )
-    if ! wait_for_home_assistant; then
-      install -m 0644 "${backup}" "${HA_CONFIG}"
-      (
-        cd "${HA_DIR}"
-        docker compose restart homeassistant
-      ) || true
-      rm -f -- "${backup}" "${temporary}"
-      echo "❌ 自動載入設定啟用失敗，已回復原設定。" >&2
-      exit 1
-    fi
-  fi
   rm -f -- "${backup}" "${temporary}"
-  show_resource_steps
+  echo "[完成] 已移除 RC3 的自動載入設定。"
 }
 
 apply_dashboard() {
   local vps_id backup had_dashboard=false
   vps_id="$(yaml_id "$(read_env VPS_ID)")"
   if [[ -z "${vps_id}" ]]; then
-    echo "❌ VPS_ID 無效，無法建立面板。" >&2
+    echo "[錯誤] VPS_ID 無效，無法建立面板。" >&2
     exit 1
   fi
   backup="${DASHBOARD_FILE}.backup.$(date +%Y%m%d-%H%M%S)"
@@ -207,7 +185,7 @@ YAML
       rm -f -- "${DASHBOARD_FILE}"
     fi
     [[ "${had_dashboard}" != "true" ]] || rm -f -- "${backup}"
-    echo "❌ Home Assistant 驗證失敗，已回復原面板。" >&2
+    echo "[錯誤] Home Assistant 驗證失敗，已回復原面板。" >&2
     exit 1
   fi
 
@@ -225,14 +203,18 @@ YAML
       docker compose restart homeassistant
     ) || true
     [[ "${had_dashboard}" != "true" ]] || rm -f -- "${backup}"
-    echo "❌ Home Assistant 啟動失敗，已回復原面板。" >&2
+    echo "[錯誤] Home Assistant 啟動失敗，已回復原面板。" >&2
     exit 1
   fi
   [[ "${had_dashboard}" != "true" ]] || rm -f -- "${backup}"
-  echo "✅ Apple 風格面板已套用。"
+  echo "[完成] Apple 風格面板已套用。"
   echo "若要恢復原生面板：sudo vps-sentinel dashboard"
 }
 
+remove_legacy_auto_module
 install_asset
-register_frontend_module
-apply_dashboard
+if [[ "${1:-}" == "--apply" ]]; then
+  apply_dashboard
+else
+  show_resource_steps
+fi
