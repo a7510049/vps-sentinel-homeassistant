@@ -56,7 +56,7 @@ git clone https://github.com/a7510049/vps-sentinel-homeassistant.git && cd vps-s
 瀏覽器授權一次 Tailscale。完成後，依畫面提示建立 Home Assistant
 管理員並加入 MQTT 整合即可開始使用。
 
-> 安裝器不修改 UFW、雲端防火牆或 3X-UI 連接埠。
+> 安裝器不修改 UFW、雲端防火牆或既有服務的連接埠。
 > 若 tailnet 尚未啟用 HTTPS，Tailscale 可能會要求你在瀏覽器確認一次。
 
 ## 📊 可以監控什麼
@@ -99,8 +99,8 @@ VPS 必須能主動連到 broker，但不需要把 VPS 的任何連接埠公開�
 若 broker 不在 VPN / 私網內，務必使用 TLS，不要將未加密的 1883
 直接開放到公網。
 
-同一台 VPS 若已有網站、反向代理、VPN 或其他 HTTPS 服務，標準
-`TCP 443` 可能與 Tailscale Serve 衝突。請參考
+同一台 VPS 若已有其他服務使用標準 `TCP 443`，可能與 Tailscale
+Serve 衝突。請參考
 **[開發日誌：Tailscale Serve 與既有服務的 443 連接埠衝突](docs/development-log-tailscale-serve-port-conflict.md)**，
 了解症狀、判斷方式及使用 `TCP 8443` 分流的完整紀錄。
 
