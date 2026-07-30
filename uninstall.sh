@@ -17,6 +17,7 @@ readonly UPGRADE_COMMAND="/usr/local/sbin/vps-sentinel-upgrade"
 readonly DOCTOR_COMMAND="/usr/local/sbin/vps-sentinel-doctor"
 readonly BACKUP_COMMAND="/usr/local/sbin/vps-sentinel-backup"
 readonly AUTOMATIONS_COMMAND="/usr/local/sbin/vps-sentinel-automations"
+readonly APPLE_COMMAND="/usr/local/sbin/vps-sentinel-apple"
 readonly SETTINGS_BACKUP_DIR="/opt/vps-sentinel-backups"
 readonly REPORT_DIR="/root/vps-sentinel-reports"
 
@@ -272,7 +273,7 @@ case "${choice}" in
     remove_tailscale_serve
     rm -f -- "${CREDENTIALS_FILE}" "${UPDATE_COMMAND}" "${MANAGE_COMMAND}" \
       "${UPGRADE_COMMAND}" "${DOCTOR_COMMAND}" "${BACKUP_COMMAND}" \
-      "${AUTOMATIONS_COMMAND}"
+      "${AUTOMATIONS_COMMAND}" "${APPLE_COMMAND}"
     remove_tree "${SETTINGS_BACKUP_DIR}"
     remove_tree "${REPORT_DIR}"
 

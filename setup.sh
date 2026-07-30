@@ -50,6 +50,8 @@ fi
 if [[ ! -f "${REPO_DIR}/upgrade.sh" || ! -f "${REPO_DIR}/VERSION" ||
       ! -f "${REPO_DIR}/doctor.sh" || ! -f "${REPO_DIR}/backup.sh" ||
       ! -f "${REPO_DIR}/automations.sh" ||
+      ! -f "${REPO_DIR}/apple-dashboard.sh" ||
+      ! -f "${REPO_DIR}/home-assistant/www/vps-sentinel-apple-card.js" ||
       ! -d "${REPO_DIR}/home-assistant/blueprints" ]]; then
   red "找不到升級工具或版本檔，請先重新下載完整專案。"
   exit 1
@@ -516,6 +518,11 @@ install -m 0755 "${REPO_DIR}/backup.sh" \
   /usr/local/sbin/vps-sentinel-backup
 install -m 0755 "${REPO_DIR}/automations.sh" \
   /usr/local/sbin/vps-sentinel-automations
+install -m 0755 "${REPO_DIR}/apple-dashboard.sh" \
+  /usr/local/sbin/vps-sentinel-apple
+install -m 0644 \
+  "${REPO_DIR}/home-assistant/www/vps-sentinel-apple-card.js" \
+  "${MONITOR_DIR}/vps-sentinel-apple-card.js"
 install -d -m 0755 "${MONITOR_DIR}/blueprints"
 install -m 0644 "${REPO_DIR}"/home-assistant/blueprints/*.yaml \
   "${MONITOR_DIR}/blueprints/"

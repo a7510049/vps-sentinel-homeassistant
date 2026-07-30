@@ -10,6 +10,8 @@ import subprocess
 import threading
 import time
 from datetime import datetime, timezone
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 import psutil
 import paho.mqtt.client as mqtt
@@ -62,6 +64,7 @@ def os_release():
 
 
 OS_RELEASE = os_release()
+OS_NAME = OS_RELEASE.get("PRETTY_NAME", OS_RELEASE.get("NAME", "Linux"))
 
 
 def installed_version():
@@ -97,6 +100,40 @@ def parse_security_updates(output):
         for line in output.splitlines()
         if line.startswith("Inst ") and "-security" in line
     )
+
+
+def parse_ip_metadata(payload):
+    if not payload.get("success"):
+        return {"country_code": "unknown", "provider": "unknown"}
+    connection = payload.get("connection") or {}
+    country_code = str(payload.get("country_code") or "").upper()
+    if not re.fullmatch(r"[A-Z]{2}", country_code):
+        country_code = "unknown"
+    provider = (
+        connection.get("org")
+        or connection.get("isp")
+        or connection.get("domain")
+        or "unknown"
+    )
+    return {
+        "country_code": country_code,
+        "provider": str(provider).strip() or "unknown",
+    }
+
+
+def ip_metadata():
+    if env("IP_METADATA", "true").lower() not in ("1", "true", "yes"):
+        return {"country_code": "unknown", "provider": "unknown"}
+    request = Request(
+        "https://ipwho.is/",
+        headers={"User-Agent": f"VPS-Sentinel/{installed_version()}"},
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            payload = json.loads(response.read(65536).decode("utf-8"))
+        return parse_ip_metadata(payload)
+    except (HTTPError, URLError, OSError, ValueError, json.JSONDecodeError):
+        return {"country_code": "unknown", "provider": "unknown"}
 
 
 def security_updates():
@@ -264,6 +301,15 @@ def publish_discovery(client):
         "failed_services": config_sensor(
             "failed_services", "異常服務", icon="mdi:server-off"
         ),
+        "country_code": config_sensor(
+            "country_code", "節點國家", icon="mdi:flag"
+        ),
+        "provider": config_sensor(
+            "provider", "VPS 供應商", icon="mdi:cloud"
+        ),
+        "os_name": config_sensor(
+            "os_name", "作業系統", icon="mdi:linux"
+        ),
     }
     docker_sensors = {
         "docker_running": config_sensor(
@@ -378,6 +424,7 @@ def main():
     disk = psutil.disk_usage("/")
     load = os.getloadavg()
     last_status_payload = None
+    location = ip_metadata()
 
     try:
         while True:
@@ -463,6 +510,9 @@ def main():
                 "docker_running": docker["running"],
                 "docker_unhealthy": docker["unhealthy"],
                 "failed_services": ", ".join(failed) if failed else "無",
+                "country_code": location["country_code"],
+                "provider": location["provider"],
+                "os_name": OS_NAME,
                 "resource_overload": resource_overload,
                 "disk_low": disk_low,
                 "service_problem": service_problem,

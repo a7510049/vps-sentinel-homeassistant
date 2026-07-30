@@ -37,6 +37,23 @@ class MonitorParsingTests(unittest.TestCase):
     def test_os_release_parser_returns_mapping(self):
         self.assertIsInstance(vps_monitor.OS_RELEASE, dict)
 
+    def test_ip_metadata_parser_keeps_only_display_fields(self):
+        result = vps_monitor.parse_ip_metadata({
+            "success": True,
+            "ip": "203.0.113.1",
+            "country_code": "jp",
+            "connection": {"org": "Example Cloud", "isp": "Example ISP"},
+        })
+        self.assertEqual(result["country_code"], "JP")
+        self.assertEqual(result["provider"], "Example Cloud")
+        self.assertNotIn("ip", result)
+
+    def test_ip_metadata_parser_has_safe_fallback(self):
+        self.assertEqual(
+            vps_monitor.parse_ip_metadata({"success": False}),
+            {"country_code": "unknown", "provider": "unknown"},
+        )
+
     def test_development_version_has_safe_fallback(self):
         self.assertTrue(vps_monitor.installed_version())
 

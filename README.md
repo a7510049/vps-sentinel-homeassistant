@@ -220,10 +220,22 @@ Home Assistant 更新使用的舊映像標籤也會一併移除，避免長期�
 自適應版面會在手機改為單欄，在平板與電腦依寬度展開最多三欄；
 CPU、記憶體與磁碟使用同級動態長條，異常時才顯示醒目提醒。點選
 任一資源卡可直接開啟 Home Assistant 原生詳細資料。
+
+0.8 起另提供可選的 Apple 風格面板。它使用約 10 KB 的本機前端元件，
+不需要 HACS、額外主題，也不會建立新的 VPS 常駐程序；外觀會自動跟隨
+Home Assistant 的深色或淺色模式。安裝工具會透過官方
+儀表板資源頁載入元件；第一次需要手動註冊 JavaScript 模組，後續更新
+不必重複新增。註冊後執行 `sudo vps-sentinel-apple --apply` 即可套用。
+固定資源網址為 `/local/vps-sentinel-apple-card.js`。
+若要返回完全原生的穩定面板，執行 `sudo vps-sentinel dashboard` 即可。
 工具會先備份 `configuration.yaml`，產生獨立的
 `vps-sentinel-dashboard.yaml`，通過 Home Assistant 設定檢查後才重新
-啟動。若偵測到既有的 Lovelace YAML 自訂架構，會停止自動修改，避免
-覆蓋使用者設定。
+啟動；驗證或啟動失敗時會自動回復原設定。工具不直接修改 `.storage`。
+
+面板可顯示節點國旗、VPS 供應商與作業系統。國家與供應商預設於監控
+服務啟動時透過 `https://ipwho.is/` 查詢一次，不會把公網 IP 發布到
+MQTT。若不希望使用外部查詢，可在 `/etc/vps-monitor.env` 設定
+`IP_METADATA=false` 後重新啟動 `vps-monitor`。
 
 ## 🩺 健康檢查與安全修復
 
