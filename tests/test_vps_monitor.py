@@ -40,6 +40,20 @@ class MonitorParsingTests(unittest.TestCase):
     def test_development_version_has_safe_fallback(self):
         self.assertTrue(vps_monitor.installed_version())
 
+    def test_discovery_sensor_tolerates_old_retained_payload(self):
+        config = vps_monitor.config_sensor("last_report", "最近回報時間")
+        self.assertIn(
+            "value_json.get('last_report', 'unknown')",
+            config["value_template"],
+        )
+
+    def test_discovery_binary_tolerates_missing_field(self):
+        config = vps_monitor.config_binary("service_problem", "服務運作狀態")
+        self.assertIn(
+            "value_json.get('service_problem', false)",
+            config["value_template"],
+        )
+
     @patch.object(vps_monitor, "run", return_value=None)
     def test_security_updates_returns_unknown_on_command_failure(self, _run):
         self.assertEqual(vps_monitor.security_updates(), "unknown")
