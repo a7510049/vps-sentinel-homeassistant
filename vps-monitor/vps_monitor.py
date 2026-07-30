@@ -39,6 +39,8 @@ BASE = f"vps/{VPS_ID}"
 STATE = f"{BASE}/state"
 RESOURCE_STATE = f"{BASE}/resources"
 STATUS_STATE = f"{BASE}/status"
+MAINTENANCE_STATE = f"{BASE}/maintenance"
+COMMAND_TOPIC = f"{BASE}/command"
 ONLINE = f"{BASE}/online"
 CPU_WARN = float(env("CPU_WARN_PERCENT", "90"))
 MEM_WARN = float(env("MEMORY_WARN_PERCENT", "90"))
@@ -46,6 +48,10 @@ DISK_WARN = float(env("DISK_WARN_PERCENT", "85"))
 OVERLOAD_SAMPLES = max(1, int(env("OVERLOAD_SAMPLES", "10")))
 SERVICES = env("WATCH_SERVICES").split()
 DOCKER_PRESENT = shutil.which("docker") is not None
+REMOTE_ACTIONS = env("ALLOW_REMOTE_ACTIONS", "false").lower() in (
+    "1", "true", "yes"
+)
+COMMAND_COOLDOWN = max(60, int(env("COMMAND_COOLDOWN", "300")))
 
 if not HOST:
     raise SystemExit("MQTT_HOST is required")
@@ -85,10 +91,10 @@ DEVICE = {
 }
 
 
-def run(command):
+def run(command, timeout=15):
     try:
         return subprocess.run(
-            command, capture_output=True, text=True, timeout=15, check=False
+            command, capture_output=True, text=True, timeout=timeout, check=False
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -134,6 +140,165 @@ def ip_metadata():
         return parse_ip_metadata(payload)
     except (HTTPError, URLError, OSError, ValueError, json.JSONDecodeError):
         return {"country_code": "unknown", "provider": "unknown"}
+
+
+def transient_command(unit, command):
+    return [
+        "/usr/bin/systemd-run",
+        "--quiet",
+        "--wait",
+        "--pipe",
+        "--collect",
+        f"--unit={unit}",
+        "--property=PrivateTmp=yes",
+        "--property=ProtectHome=yes",
+        "--property=NoNewPrivileges=yes",
+        *command,
+    ]
+
+
+def maintenance_result(action, runner=run):
+    if action == "refresh":
+        result = runner(
+            transient_command(
+                "vps-sentinel-refresh",
+                ["/usr/bin/apt-get", "update"],
+            ),
+            timeout=600,
+        )
+        if not result or result.returncode != 0:
+            return False, "更新清單失敗"
+        updates = security_updates()
+        if isinstance(updates, int):
+            return True, f"可安裝 {updates} 項安全更新"
+        return True, "套件清單已更新"
+    if action == "security_update":
+        executable = shutil.which("unattended-upgrade")
+        if not executable:
+            return False, "主機未安裝 unattended-upgrade"
+        result = runner(
+            transient_command(
+                "vps-sentinel-security-update",
+                [executable, "-d"],
+            ),
+            timeout=1800,
+        )
+        if not result or result.returncode != 0:
+            return False, "安全更新執行失敗"
+        return True, "安全更新已完成"
+    if action == "reboot":
+        result = runner([
+            "/usr/bin/systemd-run",
+            "--quiet",
+            "--collect",
+            "--unit=vps-sentinel-reboot",
+            "--on-active=30s",
+            "/usr/bin/systemctl",
+            "reboot",
+        ], timeout=30)
+        if not result or result.returncode != 0:
+            return False, "重新啟動排程失敗"
+        return True, "主機將在 30 秒後重新啟動"
+    return False, "不支援的維護操作"
+
+
+class MaintenanceController:
+    ACTIONS = {"refresh", "security_update", "reboot"}
+
+    def __init__(self, client, enabled=REMOTE_ACTIONS,
+                 cooldown=COMMAND_COOLDOWN, clock=time.monotonic,
+                 wall_clock=time.time):
+        self.client = client
+        self.enabled = enabled
+        self.cooldown = cooldown
+        self.clock = clock
+        self.wall_clock = wall_clock
+        self.lock = threading.Lock()
+        self.busy = False
+        self.last_started = float("-inf")
+
+    def publish(self, state, action="none", message=""):
+        payload = {
+            "state": state,
+            "action": action,
+            "message": message,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self.client.publish(
+            MAINTENANCE_STATE,
+            json.dumps(payload, ensure_ascii=False),
+            qos=1,
+            retain=True,
+        )
+
+    def submit(self, raw_payload):
+        if not self.enabled:
+            self.publish("disabled", message="遠端維護未啟用")
+            return False
+        if not isinstance(raw_payload, str) or len(raw_payload) > 512:
+            self.publish("rejected", message="命令內容過長或格式無效")
+            return False
+        try:
+            payload = json.loads(raw_payload)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            self.publish("rejected", message="命令格式無效")
+            return False
+        if not isinstance(payload, dict):
+            self.publish("rejected", message="命令格式無效")
+            return False
+        action = payload.get("action")
+        request_id = payload.get("request_id")
+        issued_at = payload.get("issued_at")
+        allowed_keys = {"action", "request_id", "issued_at"}
+        fresh = (
+            isinstance(issued_at, (int, float))
+            and abs(self.wall_clock() * 1000 - issued_at) <= 60000
+        )
+        valid_request = (
+            isinstance(request_id, str)
+            and 1 <= len(request_id) <= 64
+            and re.fullmatch(r"[A-Za-z0-9_-]+", request_id)
+        )
+        if (
+            action not in self.ACTIONS
+            or set(payload) - allowed_keys
+            or not fresh
+            or not valid_request
+        ):
+            self.publish("rejected", message="命令不在允許清單")
+            return False
+        with self.lock:
+            now = self.clock()
+            if self.busy:
+                self.publish("busy", action, "已有維護操作正在執行")
+                return False
+            if now - self.last_started < self.cooldown:
+                self.publish("cooldown", action, "操作冷卻中，請稍後再試")
+                return False
+            self.busy = True
+            self.last_started = now
+        worker = threading.Thread(
+            target=self._execute,
+            args=(action,),
+            daemon=True,
+            name=f"maintenance-{action}",
+        )
+        worker.start()
+        return True
+
+    def _execute(self, action):
+        self.publish("running", action, "操作執行中")
+        try:
+            success, message = maintenance_result(action)
+            state = "scheduled" if success and action == "reboot" else (
+                "success" if success else "failed"
+            )
+            self.publish(state, action, message)
+        except Exception:
+            self.publish("failed", action, "操作發生未預期錯誤")
+        finally:
+            with self.lock:
+                self.busy = False
 
 
 def security_updates():
@@ -346,6 +511,20 @@ def publish_discovery(client):
                 f"{PREFIX}/sensor/{VPS_ID}/{key}/config",
                 payload=None, qos=1, retain=True,
             )
+    if REMOTE_ACTIONS:
+        sensors["maintenance_status"] = config_sensor(
+            "maintenance_status",
+            "主機維護狀態",
+            icon="mdi:tools",
+            topic=MAINTENANCE_STATE,
+            value_template="{{ value_json.get('state', 'unknown') }}",
+            attributes="{{ value_json | tojson }}",
+        )
+    else:
+        client.publish(
+            f"{PREFIX}/sensor/{VPS_ID}/maintenance_status/config",
+            payload=None, qos=1, retain=True,
+        )
     binaries = {
         "reporting": config_binary(
             "reporting", "資料持續更新", device_class="connectivity",
@@ -391,6 +570,18 @@ def main():
         client_id=f"vps-monitor-{VPS_ID}",
         clean_session=True,
     )
+    maintenance = MaintenanceController(client)
+
+    def on_command(_client, _userdata, message):
+        if message.retain:
+            maintenance.publish("rejected", message="已拒絕保留的舊命令")
+            return
+        try:
+            payload = message.payload.decode("utf-8")
+        except UnicodeDecodeError:
+            maintenance.publish("rejected", message="命令編碼無效")
+            return
+        maintenance.submit(payload)
 
     def on_connect(mqtt_client, _userdata, _flags, reason_code, _properties):
         if reason_code != 0:
@@ -399,9 +590,17 @@ def main():
         print(f"MQTT 已連線：{HOST}:{PORT}", flush=True)
         publish_discovery(mqtt_client)
         mqtt_client.publish(ONLINE, "ON", qos=1, retain=True)
+        if REMOTE_ACTIONS:
+            # A maintenance command must never survive a reconnect. Clear any
+            # retained payload before subscribing, then reject retained
+            # messages defensively in the callback as well.
+            mqtt_client.publish(COMMAND_TOPIC, payload=None, qos=1, retain=True)
+            mqtt_client.subscribe(COMMAND_TOPIC, qos=1)
+            maintenance.publish("idle", message="等待操作")
         wake_on_connect.set()
 
     client.on_connect = on_connect
+    client.message_callback_add(COMMAND_TOPIC, on_command)
     client.reconnect_delay_set(min_delay=5, max_delay=300)
     if USER:
         client.username_pw_set(USER, PASSWORD)

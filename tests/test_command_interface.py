@@ -21,8 +21,8 @@ UNINSTALL = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
 
 
 class CommandInterfaceTests(unittest.TestCase):
-    def test_release_version_is_0_8(self):
-        self.assertEqual(VERSION, "0.8.1")
+    def test_release_version_is_0_9(self):
+        self.assertEqual(VERSION, "0.9.0")
 
     def test_apple_dashboard_preserves_storage_and_native_fallback(self):
         self.assertEqual(APPLE_DASHBOARD.count(".storage"), 1)
@@ -30,7 +30,7 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn("--apply", APPLE_DASHBOARD)
         self.assertIn("新增一筆儀表板資源", APPLE_DASHBOARD)
         self.assertIn(
-            'RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.8"',
+            'RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.9"',
             APPLE_DASHBOARD,
         )
         self.assertIn("remove_legacy_auto_module", APPLE_DASHBOARD)
@@ -49,6 +49,20 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn("provider:", APPLE_DASHBOARD)
         self.assertIn("osName:", APPLE_DASHBOARD)
         self.assertNotIn("https://", APPLE_CARD)
+
+    def test_apple_card_maintenance_is_explicit_and_non_retained(self):
+        self.assertIn("主機維護", APPLE_CARD)
+        self.assertIn("安全更新", APPLE_CARD)
+        self.assertIn("重新啟動主機", APPLE_CARD)
+        self.assertIn('retain: false', APPLE_CARD)
+        self.assertIn('issued_at: Date.now()', APPLE_CARD)
+        self.assertIn("commandTopic:", APPLE_DASHBOARD)
+        self.assertNotIn('pill.textContent = live ? "●', APPLE_CARD)
+
+    def test_remote_maintenance_defaults_off_and_has_a_settings_toggle(self):
+        self.assertIn('ALLOW_REMOTE_ACTIONS="false"', SETUP)
+        self.assertIn("toggle_remote_actions", MANAGE)
+        self.assertIn("固定安全操作", MANAGE)
 
     def test_apple_assets_follow_install_upgrade_and_removal_lifecycle(self):
         for script in (SETUP, SENTINEL_UPGRADE):

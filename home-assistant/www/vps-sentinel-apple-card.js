@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.8.1";
+const CARD_VERSION = "0.9.0";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -313,6 +313,91 @@ class VpsSentinelAppleCard extends HTMLElement {
           text-overflow: ellipsis;
           white-space: nowrap;
         }
+        .maintenance {
+          display: none;
+          margin-top: 18px;
+          padding: 16px;
+          border: 1px solid color-mix(in srgb, var(--vs-blue) 18%, transparent);
+          border-radius: 22px;
+          background:
+            linear-gradient(
+              135deg,
+              color-mix(in srgb, var(--vs-blue) 10%, transparent),
+              color-mix(in srgb, var(--vs-purple) 8%, transparent),
+              color-mix(in srgb, var(--card-background-color) 90%, transparent)
+            );
+        }
+        .maintenance.visible { display: block; }
+        .maintenance-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 12px;
+        }
+        .maintenance-title { font-size: 14px; font-weight: 720; }
+        .maintenance-state {
+          overflow: hidden;
+          color: var(--secondary-text-color);
+          font-size: 11px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .actions {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .action {
+          min-width: 0;
+          padding: 11px 8px;
+          border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+          border-radius: 15px;
+          background: color-mix(in srgb, var(--accent) 11%, transparent);
+          color: var(--primary-text-color);
+          font: inherit;
+          font-size: 12px;
+          font-weight: 680;
+          cursor: pointer;
+        }
+        .action:disabled { cursor: wait; opacity: .45; }
+        dialog {
+          width: min(330px, calc(100% - 32px));
+          padding: 0;
+          border: 1px solid color-mix(in srgb, var(--primary-text-color) 13%, transparent);
+          border-radius: 24px;
+          background: var(--card-background-color);
+          color: var(--primary-text-color);
+          box-shadow: 0 24px 80px rgba(0,0,0,.42);
+        }
+        dialog::backdrop {
+          background: rgba(0,0,0,.48);
+          backdrop-filter: blur(8px);
+        }
+        .confirm-copy { padding: 22px 22px 14px; }
+        .confirm-title { margin-bottom: 8px; font-size: 20px; font-weight: 750; }
+        .confirm-message {
+          color: var(--secondary-text-color);
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        .confirm-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          border-top: 1px solid color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+        }
+        .confirm-actions button {
+          padding: 14px;
+          border: 0;
+          background: transparent;
+          color: var(--vs-blue);
+          font: inherit;
+          font-weight: 680;
+        }
+        .confirm-actions button + button {
+          border-left: 1px solid color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+        }
+        .confirm-actions .danger { color: var(--vs-red); }
         @media (max-width: 430px) {
           ha-card { padding: 16px; border-radius: 26px; }
           .header { align-items: center; margin-bottom: 16px; }
@@ -362,6 +447,27 @@ class VpsSentinelAppleCard extends HTMLElement {
         <div class="section-title">系統資訊</div>
         <div class="insights"></div>
         <div class="alerts"></div>
+        <div class="maintenance">
+          <div class="maintenance-head">
+            <div class="maintenance-title">主機維護</div>
+            <div class="maintenance-state">等待操作</div>
+          </div>
+          <div class="actions">
+            <button class="action" data-action="refresh" style="--accent:var(--vs-blue)">檢查更新</button>
+            <button class="action" data-action="security_update" style="--accent:var(--vs-orange)">安全更新</button>
+            <button class="action" data-action="reboot" style="--accent:var(--vs-red)">重新啟動</button>
+          </div>
+        </div>
+        <dialog>
+          <div class="confirm-copy">
+            <div class="confirm-title"></div>
+            <div class="confirm-message"></div>
+          </div>
+          <div class="confirm-actions">
+            <button data-confirm="cancel">取消</button>
+            <button data-confirm="ok">繼續</button>
+          </div>
+        </dialog>
       </ha-card>`;
 
     const resources = [
@@ -376,9 +482,19 @@ class VpsSentinelAppleCard extends HTMLElement {
       reporting: this.shadowRoot.querySelector(".reporting"),
       alerts: this.shadowRoot.querySelector(".alerts"),
       identity: this.shadowRoot.querySelector(".identity"),
+      maintenance: this.shadowRoot.querySelector(".maintenance"),
+      maintenanceState: this.shadowRoot.querySelector(".maintenance-state"),
+      dialog: this.shadowRoot.querySelector("dialog"),
       resources: {},
       insights: {},
     };
+    for (const button of this.shadowRoot.querySelectorAll(".action")) {
+      button.addEventListener("click", () => this._confirmAction(button.dataset.action));
+    }
+    this.shadowRoot.querySelector('[data-confirm="cancel"]')
+      .addEventListener("click", () => this._nodes.dialog.close());
+    this.shadowRoot.querySelector('[data-confirm="ok"]')
+      .addEventListener("click", () => this._runConfirmedAction());
     this.shadowRoot.querySelector("h1").textContent =
       this._config.title || "主機狀態";
     for (const [key, label, color] of resources) {
@@ -446,7 +562,7 @@ class VpsSentinelAppleCard extends HTMLElement {
     const reporting = this._state(this._config.reporting)?.state;
     const pill = this._nodes.reporting;
     const live = reporting === "on";
-    pill.textContent = live ? "● 同步正常" : "● 同步中斷";
+    pill.textContent = live ? "同步正常" : "同步中斷";
     pill.className = `reporting ${live ? "live" : "stale"}`;
     healthCard.classList.toggle("stale", !live);
 
@@ -489,6 +605,82 @@ class VpsSentinelAppleCard extends HTMLElement {
       "visible",
       [country, provider, osName].some((value) => value !== "—"),
     );
+
+    const maintenanceEntity = this._state(this._config.maintenance);
+    const maintenance = this._nodes.maintenance;
+    const maintenanceVisible = Boolean(
+      this._config.commandTopic && maintenanceEntity,
+    );
+    maintenance.classList.toggle("visible", maintenanceVisible);
+    if (maintenanceVisible) {
+      const busy = maintenanceEntity.state === "running";
+      const message = maintenanceEntity.attributes?.message;
+      this._nodes.maintenanceState.textContent =
+        message || this._maintenanceLabel(maintenanceEntity.state);
+      for (const button of maintenance.querySelectorAll(".action")) {
+        button.disabled = busy;
+      }
+    }
+  }
+
+  _maintenanceLabel(state) {
+    return {
+      idle: "等待操作",
+      running: "處理中",
+      success: "已完成",
+      scheduled: "已排程",
+      failed: "執行失敗",
+      rejected: "操作遭拒",
+      cooldown: "請稍後再試",
+      busy: "已有操作執行中",
+    }[state] || "等待操作";
+  }
+
+  _confirmAction(action) {
+    const details = {
+      refresh: ["檢查更新", "只更新套件清單，不會安裝或重新啟動。"],
+      security_update: [
+        "安裝安全更新",
+        "只安裝 Ubuntu 安全更新；完成後可能會建議重新啟動。",
+      ],
+      reboot: [
+        "重新啟動主機",
+        "主機將在 30 秒後重新啟動，期間 Home Assistant 會暫時離線。",
+      ],
+    }[action];
+    if (!details) return;
+    this._pendingAction = action;
+    this._nodes.dialog.querySelector(".confirm-title").textContent = details[0];
+    this._nodes.dialog.querySelector(".confirm-message").textContent = details[1];
+    const confirm = this._nodes.dialog.querySelector('[data-confirm="ok"]');
+    confirm.textContent = action === "reboot" ? "重新啟動" : "繼續";
+    confirm.classList.toggle("danger", action === "reboot");
+    this._nodes.dialog.showModal();
+  }
+
+  async _runConfirmedAction() {
+    const action = this._pendingAction;
+    this._nodes.dialog.close();
+    if (!action || !this._config.commandTopic || !this._hass) return;
+    const requestId = globalThis.crypto?.randomUUID?.()
+      || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    try {
+      await this._hass.callService("mqtt", "publish", {
+        topic: this._config.commandTopic,
+        payload: JSON.stringify({
+          action,
+          request_id: requestId,
+          issued_at: Date.now(),
+        }),
+        qos: 1,
+        retain: false,
+      });
+      this._nodes.maintenanceState.textContent = "命令已送出";
+    } catch (_error) {
+      this._nodes.maintenanceState.textContent = "無法送出，請檢查 MQTT 權限";
+    } finally {
+      this._pendingAction = null;
+    }
   }
 
   _plainState(entityId, fallback = "—") {
