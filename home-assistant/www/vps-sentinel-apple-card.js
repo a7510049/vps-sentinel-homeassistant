@@ -60,7 +60,7 @@ class VpsSentinelAppleCard extends HTMLElement {
         }
         .header {
           display: flex;
-          align-items: end;
+          align-items: flex-end;
           justify-content: space-between;
           gap: 16px;
           margin-bottom: 22px;
@@ -431,7 +431,7 @@ class VpsSentinelAppleCard extends HTMLElement {
         .confirm-actions .danger { color: var(--vs-red); }
         @media (max-width: 430px) {
           ha-card { padding: 16px; border-radius: 26px; }
-          .header { align-items: center; margin-bottom: 16px; }
+          .header { align-items: flex-end; margin-bottom: 16px; }
           .resources { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
           .resource { padding: 12px 10px; border-radius: 18px; }
           .resource-top { margin-bottom: 14px; }
