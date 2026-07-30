@@ -15,8 +15,14 @@ SENTINEL_UPGRADE = (ROOT / "upgrade.sh").read_text(encoding="utf-8")
 
 
 class CommandInterfaceTests(unittest.TestCase):
-    def test_release_version_is_0_6(self):
-        self.assertEqual(VERSION, "0.6.0")
+    def test_release_version_is_0_6_1(self):
+        self.assertEqual(VERSION, "0.6.1")
+
+    def test_upgrade_version_comparison_stays_on_one_condition_line(self):
+        self.assertIn(
+            'if [[ "${downloaded_version}" != "${latest_version}" ]]; then',
+            SENTINEL_UPGRADE,
+        )
 
     def test_main_menu_has_four_stable_sections(self):
         expected = [
