@@ -215,7 +215,7 @@ class MaintenanceController:
         self.wall_clock = wall_clock
         self.lock = threading.Lock()
         self.busy = False
-        self.last_started = float("-inf")
+        self.last_started = {}
 
     def publish(self, state, action="none", message=""):
         payload = {
@@ -272,11 +272,11 @@ class MaintenanceController:
             if self.busy:
                 self.publish("busy", action, "已有維護操作正在執行")
                 return False
-            if now - self.last_started < self.cooldown:
+            if now - self.last_started.get(action, float("-inf")) < self.cooldown:
                 self.publish("cooldown", action, "操作冷卻中，請稍後再試")
                 return False
             self.busy = True
-            self.last_started = now
+            self.last_started[action] = now
         worker = threading.Thread(
             target=self._execute,
             args=(action,),

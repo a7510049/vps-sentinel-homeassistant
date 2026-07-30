@@ -110,6 +110,34 @@ class MonitorParsingTests(unittest.TestCase):
         thread.assert_called_once()
         thread.return_value.start.assert_called_once()
 
+    @patch.object(vps_monitor.threading, "Thread")
+    def test_maintenance_cooldown_only_blocks_the_same_action(self, thread):
+        class FakeClient:
+            def publish(self, *_args, **_kwargs):
+                return None
+
+        controller = vps_monitor.MaintenanceController(
+            FakeClient(),
+            enabled=True,
+            clock=lambda: 1000,
+            wall_clock=lambda: 2000,
+        )
+
+        def payload(action, request_id):
+            return json.dumps({
+                "action": action,
+                "request_id": request_id,
+                "issued_at": 2000000,
+            })
+
+        self.assertTrue(controller.submit(payload("refresh", "request-4")))
+        controller.busy = False
+        self.assertFalse(controller.submit(payload("refresh", "request-5")))
+        self.assertTrue(
+            controller.submit(payload("security_update", "request-6"))
+        )
+        self.assertEqual(thread.call_count, 2)
+
     def test_maintenance_action_has_no_arbitrary_command_path(self):
         success, message = vps_monitor.maintenance_result("shell")
         self.assertFalse(success)
