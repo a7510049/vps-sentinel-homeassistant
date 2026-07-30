@@ -25,7 +25,7 @@ UNINSTALL = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
 
 class CommandInterfaceTests(unittest.TestCase):
     def test_release_version_is_0_9(self):
-        self.assertEqual(VERSION, "0.9.2")
+        self.assertEqual(VERSION, "0.9.3")
 
     def test_apple_dashboard_preserves_storage_and_native_fallback(self):
         self.assertEqual(APPLE_DASHBOARD.count(".storage"), 1)
@@ -33,7 +33,7 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn("--apply", APPLE_DASHBOARD)
         self.assertIn("新增一筆儀表板資源", APPLE_DASHBOARD)
         self.assertIn(
-            'RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.9.2"',
+            'RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.9.3"',
             APPLE_DASHBOARD,
         )
         self.assertIn("remove_legacy_auto_module", APPLE_DASHBOARD)
@@ -48,7 +48,10 @@ class CommandInterfaceTests(unittest.TestCase):
         )
         self.assertIn("prefers-reduced-motion", APPLE_CARD)
         self.assertIn("maintenance-progress", APPLE_CARD)
-        self.assertIn("vs-maintenance-progress", APPLE_CARD)
+        self.assertIn("vs-maintenance-shimmer", APPLE_CARD)
+        self.assertIn(".insight.pressing {\n          transform: scale(.975);", APPLE_CARD)
+        self.assertIn("_cooldownSecondsRemaining", APPLE_CARD)
+        self.assertIn("remaining_seconds", APPLE_CARD)
         self.assertIn("_bindMoreInfo", APPLE_CARD)
         self.assertIn('classList.add("pressing")', APPLE_CARD)
         self.assertIn("-apple-system", APPLE_CARD)

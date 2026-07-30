@@ -146,6 +146,7 @@ class MonitorParsingTests(unittest.TestCase):
         self.assertEqual(cooldown_payload["state"], "cooldown")
         self.assertEqual(cooldown_payload["action"], "refresh")
         self.assertIn("300 秒", cooldown_payload["message"])
+        self.assertEqual(cooldown_payload["remaining_seconds"], 300)
 
     def test_maintenance_action_has_no_arbitrary_command_path(self):
         success, message = vps_monitor.maintenance_result("shell")
