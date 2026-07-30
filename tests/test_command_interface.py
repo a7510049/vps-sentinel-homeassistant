@@ -16,6 +16,9 @@ APPLE_DASHBOARD = (ROOT / "apple-dashboard.sh").read_text(encoding="utf-8")
 APPLE_CARD = (
     ROOT / "home-assistant" / "www" / "vps-sentinel-apple-card.js"
 ).read_text(encoding="utf-8")
+MONITOR_SERVICE = (
+    ROOT / "vps-monitor" / "vps-monitor.service"
+).read_text(encoding="utf-8")
 SETUP = (ROOT / "setup.sh").read_text(encoding="utf-8")
 UNINSTALL = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
 
@@ -67,6 +70,12 @@ class CommandInterfaceTests(unittest.TestCase):
             ROOT / "vps-monitor" / "vps_monitor.py"
         ).read_text(encoding="utf-8")
         self.assertIn("if not message.payload:", monitor)
+
+    def test_monitor_starts_after_local_runtime_services(self):
+        self.assertIn(
+            "After=network-online.target mosquitto.service docker.service",
+            MONITOR_SERVICE,
+        )
 
     def test_apple_assets_follow_install_upgrade_and_removal_lifecycle(self):
         for script in (SETUP, SENTINEL_UPGRADE):

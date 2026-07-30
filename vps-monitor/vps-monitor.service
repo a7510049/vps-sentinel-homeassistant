@@ -1,7 +1,7 @@
 [Unit]
 Description=VPS Sentinel monitor for Home Assistant
 Wants=network-online.target
-After=network-online.target
+After=network-online.target mosquitto.service docker.service
 
 [Service]
 Type=simple
