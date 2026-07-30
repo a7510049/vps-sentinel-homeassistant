@@ -64,6 +64,16 @@ class CommandInterfaceTests(unittest.TestCase):
         for color in ["green", "teal", "orange", "red"]:
             self.assertIn(f"color: {color}", dashboard)
 
+    def test_dashboard_sections_use_distinct_color_families(self):
+        dashboard = MANAGE.split(
+            'cat > "${DASHBOARD_FILE}" <<YAML', 1
+        )[1].split("\nYAML", 1)[0]
+        for color in ["indigo", "teal", "purple"]:
+            self.assertIn(
+                f"background:\n          color: {color}",
+                dashboard,
+            )
+
     def test_upgrade_version_comparison_stays_on_one_condition_line(self):
         self.assertIn(
             'if [[ "${downloaded_version}" != "${latest_version}" ]]; then',

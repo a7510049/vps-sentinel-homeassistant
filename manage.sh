@@ -276,8 +276,8 @@ views:
     sections:
       - type: grid
         background:
-          color: blue-grey
-          opacity: 8
+          color: indigo
+          opacity: 12
         cards:
           - type: heading
             heading: 主機資源
@@ -324,8 +324,8 @@ views:
               columns: full
       - type: grid
         background:
-          color: blue-grey
-          opacity: 8
+          color: teal
+          opacity: 10
         cards:
           - type: heading
             heading: 運作狀態
@@ -410,8 +410,8 @@ views:
               columns: 6
       - type: grid
         background:
-          color: blue-grey
-          opacity: 8
+          color: purple
+          opacity: 10
         cards:
           - type: heading
             heading: 系統資訊
@@ -420,19 +420,19 @@ views:
           - type: tile
             entity: sensor.${vps_id}_uptime_hours
             name: 已運作
-            color: blue
+            color: cyan
           - type: tile
             entity: sensor.${vps_id}_security_updates
             name: 安全更新
-            color: blue
+            color: indigo
           - type: tile
             entity: sensor.${vps_id}_docker_running
             name: 運作中容器
-            color: blue
+            color: light-blue
           - type: tile
             entity: sensor.${vps_id}_boot_time
             name: 最近開機
-            color: blue
+            color: purple
 YAML
 
   if ! grep -q '^[[:space:]]*lovelace:' "${HA_CONFIG}"; then
