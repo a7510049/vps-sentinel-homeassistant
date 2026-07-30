@@ -42,6 +42,10 @@ class CommandInterfaceTests(unittest.TestCase):
     def test_apple_card_is_self_contained_and_responsive(self):
         self.assertIn("class VpsSentinelAppleCard", APPLE_CARD)
         self.assertIn("repeat(auto-fit", APPLE_CARD)
+        self.assertIn(
+            "flex: 0 0 calc((100% - 16px) / 3)",
+            APPLE_CARD,
+        )
         self.assertIn("prefers-reduced-motion", APPLE_CARD)
         self.assertIn("-apple-system", APPLE_CARD)
         self.assertIn("系統資訊", APPLE_CARD)

@@ -432,6 +432,15 @@ class VpsSentinelAppleCard extends HTMLElement {
         @media (max-width: 430px) {
           ha-card { padding: 16px; border-radius: 26px; }
           .header { align-items: flex-end; margin-bottom: 16px; }
+          .header-status {
+            flex: 0 0 calc((100% - 16px) / 3);
+            width: calc((100% - 16px) / 3);
+          }
+          .health-card {
+            width: 100%;
+            min-width: 0;
+            padding-inline: 9px;
+          }
           .resources { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
           .resource { padding: 12px 10px; border-radius: 18px; }
           .resource-top { margin-bottom: 14px; }
@@ -441,6 +450,8 @@ class VpsSentinelAppleCard extends HTMLElement {
           .insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 340px) {
+          .header-status { flex-basis: auto; width: auto; }
+          .health-card { width: auto; }
           .resources { grid-template-columns: 1fr; }
         }
         @media (prefers-reduced-motion: reduce) {
