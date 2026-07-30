@@ -218,7 +218,8 @@ Home Assistant 更新使用的舊映像標籤也會一併移除，避免長期�
 
 「建立或更新儀表板」只使用 Home Assistant 內建卡片，不需要 HACS。
 自適應版面會在手機改為單欄，在平板與電腦依寬度展開最多三欄；
-CPU、記憶體與磁碟使用同級動態長條，異常時才顯示醒目提醒。
+CPU、記憶體與磁碟使用同級動態長條，異常時才顯示醒目提醒。點選
+任一資源卡可開啟圖形化詳情頁，按需載入最近 3 小時趨勢。
 工具會先備份 `configuration.yaml`，產生獨立的
 `vps-sentinel-dashboard.yaml`，通過 Home Assistant 設定檢查後才重新
 啟動。若偵測到既有的 Lovelace YAML 自訂架構，會停止自動修改，避免

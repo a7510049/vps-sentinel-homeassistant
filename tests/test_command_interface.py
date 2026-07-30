@@ -43,7 +43,20 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn("max_columns: 3", dashboard)
         self.assertIn("layout: responsive", dashboard)
         self.assertNotIn("type: horizontal-stack", dashboard)
-        self.assertEqual(dashboard.count("type: bar-gauge"), 3)
+        self.assertEqual(dashboard.count("type: bar-gauge"), 6)
+
+    def test_dashboard_has_on_demand_graphical_resource_subview(self):
+        dashboard = MANAGE.split(
+            'cat > "${DASHBOARD_FILE}" <<YAML', 1
+        )[1].split("\nYAML", 1)[0]
+        self.assertIn("path: resources", dashboard)
+        self.assertIn("subview: true", dashboard)
+        self.assertEqual(
+            dashboard.count("navigation_path: /vps-sentinel/resources"),
+            3,
+        )
+        self.assertEqual(dashboard.count("type: trend-graph"), 3)
+        self.assertEqual(dashboard.count("hours_to_show: 3"), 3)
 
     def test_upgrade_version_comparison_stays_on_one_condition_line(self):
         self.assertIn(

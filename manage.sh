@@ -297,6 +297,11 @@ views:
             icon: mdi:cpu-64-bit
             color: blue
             vertical: true
+            tap_action:
+              action: navigate
+              navigation_path: /vps-sentinel/resources
+            hold_action:
+              action: more-info
             features_position: bottom
             features:
               - type: bar-gauge
@@ -319,6 +324,11 @@ views:
             icon: mdi:memory
             color: purple
             vertical: true
+            tap_action:
+              action: navigate
+              navigation_path: /vps-sentinel/resources
+            hold_action:
+              action: more-info
             features_position: bottom
             features:
               - type: bar-gauge
@@ -341,6 +351,11 @@ views:
             icon: mdi:harddisk
             color: green
             vertical: true
+            tap_action:
+              action: navigate
+              navigation_path: /vps-sentinel/resources
+            hold_action:
+              action: more-info
             features_position: bottom
             features:
               - type: bar-gauge
@@ -410,6 +425,95 @@ views:
             entity: sensor.${vps_id}_boot_time
             name: 最近開機
             color: blue
+  - type: sections
+    title: 資源詳情
+    path: resources
+    subview: true
+    max_columns: 3
+    dense_section_placement: true
+    header:
+      layout: responsive
+      card:
+        type: markdown
+        content: |
+          # 資源詳情
+          顯示最近 3 小時趨勢；圖表只在開啟此頁時載入。
+    sections:
+      - type: grid
+        background:
+          color: blue
+          opacity: 12
+        cards:
+          - type: heading
+            heading: CPU
+            heading_style: title
+            icon: mdi:cpu-64-bit
+          - type: tile
+            entity: sensor.${vps_id}_cpu_percent
+            name: CPU 使用率
+            icon: mdi:cpu-64-bit
+            color: blue
+            vertical: true
+            features_position: bottom
+            features:
+              - type: bar-gauge
+                min: 0
+                max: 100
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+            grid_options:
+              columns: full
+      - type: grid
+        background:
+          color: purple
+          opacity: 12
+        cards:
+          - type: heading
+            heading: 記憶體
+            heading_style: title
+            icon: mdi:memory
+          - type: tile
+            entity: sensor.${vps_id}_memory_percent
+            name: 記憶體使用率
+            icon: mdi:memory
+            color: purple
+            vertical: true
+            features_position: bottom
+            features:
+              - type: bar-gauge
+                min: 0
+                max: 100
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+            grid_options:
+              columns: full
+      - type: grid
+        background:
+          color: green
+          opacity: 12
+        cards:
+          - type: heading
+            heading: 磁碟
+            heading_style: title
+            icon: mdi:harddisk
+          - type: tile
+            entity: sensor.${vps_id}_disk_percent
+            name: 磁碟使用率
+            icon: mdi:harddisk
+            color: green
+            vertical: true
+            features_position: bottom
+            features:
+              - type: bar-gauge
+                min: 0
+                max: 100
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+            grid_options:
+              columns: full
 YAML
 
   if ! grep -q '^[[:space:]]*lovelace:' "${HA_CONFIG}"; then
