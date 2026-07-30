@@ -331,34 +331,83 @@ views:
             heading: 運作狀態
             heading_style: title
             icon: mdi:shield-check
-          - type: conditional
-            conditions:
-              - condition: state
-                entity: sensor.${vps_id}_health_status
-                state_not: 運作正常
-            card:
-              type: tile
-              entity: sensor.${vps_id}_health_status
-              name: 主機需要留意
-              color: orange
-            grid_options:
-              columns: full
           - type: tile
             entity: sensor.${vps_id}_health_status
-            name: 整體狀態
-            color: blue
+            name: 主機狀態
+            icon: mdi:check-circle
+            color: green
+            visibility:
+              - condition: state
+                entity: sensor.${vps_id}_health_status
+                state: 運作正常
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: sensor.${vps_id}_health_status
+            name: 主機狀態
+            icon: mdi:alert-circle
+            color: orange
+            visibility:
+              - condition: state
+                entity: sensor.${vps_id}_health_status
+                state: 需要留意
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: sensor.${vps_id}_health_status
+            name: 主機狀態
+            icon: mdi:alert-octagon
+            color: red
+            visibility:
+              - condition: state
+                entity: sensor.${vps_id}_health_status
+                state: 需要處理
+            grid_options:
+              columns: 6
           - type: tile
             entity: binary_sensor.${vps_id}_reporting
-            name: 資料更新
-            color: green
+            name: 資料回報
+            icon: mdi:cloud-check
+            color: teal
+            visibility:
+              - condition: state
+                entity: binary_sensor.${vps_id}_reporting
+                state: "on"
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: binary_sensor.${vps_id}_reporting
+            name: 資料已停止更新
+            icon: mdi:cloud-alert
+            color: red
+            visibility:
+              - condition: state
+                entity: binary_sensor.${vps_id}_reporting
+                state: unavailable
+            grid_options:
+              columns: 6
           - type: tile
             entity: binary_sensor.${vps_id}_service_problem
-            name: 服務狀態
-            color: green
+            name: 服務異常
+            icon: mdi:server-off
+            color: red
+            visibility:
+              - condition: state
+                entity: binary_sensor.${vps_id}_service_problem
+                state: "on"
+            grid_options:
+              columns: 6
           - type: tile
             entity: binary_sensor.${vps_id}_reboot_required
-            name: 重新啟動
+            name: 需要重新啟動
+            icon: mdi:restart-alert
             color: orange
+            visibility:
+              - condition: state
+                entity: binary_sensor.${vps_id}_reboot_required
+                state: "on"
+            grid_options:
+              columns: 6
       - type: grid
         background:
           color: blue-grey

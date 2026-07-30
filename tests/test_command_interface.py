@@ -53,6 +53,17 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertNotIn("navigation_path:", dashboard)
         self.assertEqual(dashboard.count("vertical: false"), 3)
 
+    def test_dashboard_only_shows_actionable_health_details(self):
+        dashboard = MANAGE.split(
+            'cat > "${DASHBOARD_FILE}" <<YAML', 1
+        )[1].split("\nYAML", 1)[0]
+        self.assertIn("name: 服務異常", dashboard)
+        self.assertIn("name: 需要重新啟動", dashboard)
+        self.assertIn("name: 資料已停止更新", dashboard)
+        self.assertNotIn("name: 重新啟動\n", dashboard)
+        for color in ["green", "teal", "orange", "red"]:
+            self.assertIn(f"color: {color}", dashboard)
+
     def test_upgrade_version_comparison_stays_on_one_condition_line(self):
         self.assertIn(
             'if [[ "${downloaded_version}" != "${latest_version}" ]]; then',
