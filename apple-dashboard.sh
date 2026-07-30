@@ -127,6 +127,12 @@ views:
         disk: sensor.${vps_id}_disk_percent
         health: sensor.${vps_id}_health_status
         reporting: binary_sensor.${vps_id}_reporting
+        uptime: sensor.${vps_id}_uptime_hours
+        updates: sensor.${vps_id}_security_updates
+        containers: sensor.${vps_id}_docker_running
+        bootTime: sensor.${vps_id}_boot_time
+        serviceProblem: binary_sensor.${vps_id}_service_problem
+        rebootRequired: binary_sensor.${vps_id}_reboot_required
 YAML
 
   if ! docker exec homeassistant python -m homeassistant \

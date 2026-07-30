@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.8.0-preview";
+const CARD_VERSION = "0.8.0-rc.2";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -179,6 +179,57 @@ class VpsSentinelAppleCard extends HTMLElement {
         }
         .pill.live { color: var(--vs-green); }
         .pill.stale { color: var(--vs-red); }
+        .section-title {
+          margin: 22px 2px 10px;
+          color: var(--secondary-text-color);
+          font-size: 13px;
+          font-weight: 700;
+          letter-spacing: .02em;
+        }
+        .insights {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr));
+          gap: 10px;
+        }
+        .insight {
+          min-width: 0;
+          padding: 13px 14px;
+          border-radius: 18px;
+          background: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
+          cursor: pointer;
+        }
+        .insight-label {
+          margin-bottom: 5px;
+          color: var(--secondary-text-color);
+          font-size: 12px;
+          font-weight: 620;
+        }
+        .insight-value {
+          overflow: hidden;
+          font-size: 16px;
+          font-weight: 720;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .alerts {
+          display: none;
+          gap: 8px;
+          margin-top: 12px;
+        }
+        .alerts.visible { display: flex; flex-wrap: wrap; }
+        .alert {
+          padding: 8px 11px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--vs-orange) 16%, transparent);
+          color: var(--vs-orange);
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .alert.critical {
+          background: color-mix(in srgb, var(--vs-red) 16%, transparent);
+          color: var(--vs-red);
+        }
         @media (max-width: 430px) {
           ha-card { padding: 16px; border-radius: 26px; }
           .header { align-items: center; margin-bottom: 16px; }
@@ -188,6 +239,7 @@ class VpsSentinelAppleCard extends HTMLElement {
           .label { font-size: 12px; }
           .value { font-size: clamp(22px, 8vw, 30px); }
           .track { height: 6px; }
+          .insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 340px) {
           .resources { grid-template-columns: 1fr; }
@@ -212,6 +264,9 @@ class VpsSentinelAppleCard extends HTMLElement {
         <div class="footer">
           <span class="pill reporting">資料讀取中</span>
         </div>
+        <div class="section-title">系統資訊</div>
+        <div class="insights"></div>
+        <div class="alerts"></div>
       </ha-card>`;
 
     const resources = [
@@ -223,7 +278,9 @@ class VpsSentinelAppleCard extends HTMLElement {
     this._nodes = {
       status: this.shadowRoot.querySelector(".status"),
       reporting: this.shadowRoot.querySelector(".reporting"),
+      alerts: this.shadowRoot.querySelector(".alerts"),
       resources: {},
+      insights: {},
     };
     this.shadowRoot.querySelector("h1").textContent =
       this._config.title || "主機狀態";
@@ -239,6 +296,23 @@ class VpsSentinelAppleCard extends HTMLElement {
       node.addEventListener("click", () => this._moreInfo(this._config[key]));
       container.appendChild(node);
       this._nodes.resources[key] = node;
+    }
+    const insights = [
+      ["uptime", "已運作"],
+      ["updates", "安全更新"],
+      ["containers", "運作中容器"],
+      ["bootTime", "最近開機"],
+    ];
+    const insightContainer = this.shadowRoot.querySelector(".insights");
+    for (const [key, label] of insights) {
+      const node = document.createElement("div");
+      node.className = "insight";
+      node.innerHTML =
+        '<div class="insight-label"></div><div class="insight-value">—</div>';
+      node.querySelector(".insight-label").textContent = label;
+      node.addEventListener("click", () => this._moreInfo(this._config[key]));
+      insightContainer.appendChild(node);
+      this._nodes.insights[key] = node;
     }
     if (this._hass) this._update();
   }
@@ -275,6 +349,69 @@ class VpsSentinelAppleCard extends HTMLElement {
     const live = reporting === "on";
     pill.textContent = live ? "● 資料持續更新" : "● 資料已停止更新";
     pill.className = `pill reporting ${live ? "live" : "stale"}`;
+
+    const insightValues = {
+      uptime: this._formatUptime(this._state(this._config.uptime)?.state),
+      updates: this._plainState(this._config.updates, "0"),
+      containers: this._plainState(this._config.containers),
+      bootTime: this._formatTime(this._state(this._config.bootTime)?.state),
+    };
+    for (const [key, value] of Object.entries(insightValues)) {
+      const node = this._nodes.insights[key];
+      node.querySelector(".insight-value").textContent = value;
+      node.hidden = !this._config[key];
+    }
+
+    const alerts = this._nodes.alerts;
+    alerts.replaceChildren();
+    this._appendAlert(
+      alerts,
+      this._config.serviceProblem,
+      "服務需要留意",
+      "critical",
+    );
+    this._appendAlert(
+      alerts,
+      this._config.rebootRequired,
+      "建議重新啟動",
+      "",
+    );
+    alerts.classList.toggle("visible", alerts.childElementCount > 0);
+  }
+
+  _plainState(entityId, fallback = "—") {
+    if (!entityId) return fallback;
+    const state = this._state(entityId)?.state;
+    return !state || ["unknown", "unavailable"].includes(state) ? fallback : state;
+  }
+
+  _formatUptime(value) {
+    const hours = Number.parseFloat(value);
+    if (!Number.isFinite(hours)) return "—";
+    const days = Math.floor(hours / 24);
+    const remaining = Math.floor(hours % 24);
+    return days > 0 ? `${days}天 ${remaining}小時` : `${remaining}小時`;
+  }
+
+  _formatTime(value) {
+    if (!value || ["unknown", "unavailable"].includes(value)) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return new Intl.DateTimeFormat("zh-TW", {
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date);
+  }
+
+  _appendAlert(container, entityId, label, className) {
+    if (!entityId || this._state(entityId)?.state !== "on") return;
+    const node = document.createElement("div");
+    node.className = `alert ${className}`.trim();
+    node.textContent = label;
+    node.addEventListener("click", () => this._moreInfo(entityId));
+    container.appendChild(node);
   }
 
   _moreInfo(entityId) {

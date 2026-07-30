@@ -222,7 +222,8 @@ CPU、記憶體與磁碟使用同級動態長條，異常時才顯示醒目提�
 任一資源卡可直接開啟 Home Assistant 原生詳細資料。
 
 0.8 起另提供可選的 Apple 風格面板。它使用約 10 KB 的本機前端元件，
-不需要 HACS，也不會建立新的 VPS 常駐程序。首次啟用時依畫面指示，
+不需要 HACS、額外主題，也不會建立新的 VPS 常駐程序；外觀會自動跟隨
+Home Assistant 的深色或淺色模式。首次啟用時依畫面指示，
 在 Home Assistant「設定 → 儀表板 → 資源」註冊一次 JavaScript 模組，
 再執行 `sudo vps-sentinel-apple --apply`。若要返回完全原生的穩定面板，
 執行 `sudo vps-sentinel dashboard` 即可。

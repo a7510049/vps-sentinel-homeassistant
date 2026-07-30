@@ -34,6 +34,10 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn("repeat(auto-fit", APPLE_CARD)
         self.assertIn("prefers-reduced-motion", APPLE_CARD)
         self.assertIn("-apple-system", APPLE_CARD)
+        self.assertIn("系統資訊", APPLE_CARD)
+        self.assertIn("_formatUptime", APPLE_CARD)
+        self.assertIn("serviceProblem", APPLE_DASHBOARD)
+        self.assertIn("rebootRequired", APPLE_DASHBOARD)
         self.assertNotIn("https://", APPLE_CARD)
 
     def test_apple_assets_follow_install_upgrade_and_removal_lifecycle(self):
