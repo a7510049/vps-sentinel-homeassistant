@@ -205,6 +205,9 @@ if [[ "${configure}" == "true" ]]; then
   prompt memory_warn "記憶體過載門檻（%）" "90"
   prompt disk_warn "磁碟不足門檻（%）" "85"
   prompt overload_samples "連續幾次超標才告警" "${overload_default}"
+  remote_actions=""
+  prompt_yes_no remote_actions \
+    "是否允許從 Home Assistant 執行安全更新與重新啟動" "no"
 
   require_integer "MQTT 連接埠" "${mqtt_port}"
   require_integer "回報間隔" "${interval}"
@@ -238,6 +241,8 @@ if [[ "${configure}" == "true" ]]; then
     printf 'DISK_WARN_PERCENT=%s\n' "$(env_value "${disk_warn}")"
     printf 'OVERLOAD_SAMPLES=%s\n' "$(env_value "${overload_samples}")"
     printf 'WATCH_SERVICES=%s\n' "$(env_value "${services}")"
+    printf 'ALLOW_REMOTE_ACTIONS=%s\n' "$(env_value "${remote_actions}")"
+    printf 'COMMAND_COOLDOWN=%s\n' '"300"'
   } > "${ENV_FILE}"
   chmod 0600 "${ENV_FILE}"
   ok "安全設定檔已建立（權限 600）"
@@ -249,7 +254,7 @@ info "步驟 3/4：安裝程式與系統服務"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
-  python3 python3-venv python3-pip ca-certificates
+  python3 python3-venv python3-pip ca-certificates unattended-upgrades
 
 install -d -m 0755 "${INSTALL_DIR}"
 install -m 0755 "${SCRIPT_DIR}/vps_monitor.py" "${INSTALL_DIR}/vps_monitor.py"

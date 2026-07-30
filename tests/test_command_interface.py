@@ -16,13 +16,16 @@ APPLE_DASHBOARD = (ROOT / "apple-dashboard.sh").read_text(encoding="utf-8")
 APPLE_CARD = (
     ROOT / "home-assistant" / "www" / "vps-sentinel-apple-card.js"
 ).read_text(encoding="utf-8")
+MONITOR_SERVICE = (
+    ROOT / "vps-monitor" / "vps-monitor.service"
+).read_text(encoding="utf-8")
 SETUP = (ROOT / "setup.sh").read_text(encoding="utf-8")
 UNINSTALL = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
 
 
 class CommandInterfaceTests(unittest.TestCase):
-    def test_release_version_is_0_8(self):
-        self.assertEqual(VERSION, "0.8.1")
+    def test_release_version_is_0_9(self):
+        self.assertEqual(VERSION, "0.9.0")
 
     def test_apple_dashboard_preserves_storage_and_native_fallback(self):
         self.assertEqual(APPLE_DASHBOARD.count(".storage"), 1)
@@ -30,7 +33,7 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn("--apply", APPLE_DASHBOARD)
         self.assertIn("新增一筆儀表板資源", APPLE_DASHBOARD)
         self.assertIn(
-            'RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.8"',
+            'RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.9.0"',
             APPLE_DASHBOARD,
         )
         self.assertIn("remove_legacy_auto_module", APPLE_DASHBOARD)
@@ -39,6 +42,10 @@ class CommandInterfaceTests(unittest.TestCase):
     def test_apple_card_is_self_contained_and_responsive(self):
         self.assertIn("class VpsSentinelAppleCard", APPLE_CARD)
         self.assertIn("repeat(auto-fit", APPLE_CARD)
+        self.assertIn(
+            "flex: 0 0 calc((100% - 16px) / 3)",
+            APPLE_CARD,
+        )
         self.assertIn("prefers-reduced-motion", APPLE_CARD)
         self.assertIn("-apple-system", APPLE_CARD)
         self.assertIn("系統資訊", APPLE_CARD)
@@ -49,6 +56,30 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn("provider:", APPLE_DASHBOARD)
         self.assertIn("osName:", APPLE_DASHBOARD)
         self.assertNotIn("https://", APPLE_CARD)
+
+    def test_apple_card_maintenance_is_explicit_and_non_retained(self):
+        self.assertIn("主機維護", APPLE_CARD)
+        self.assertIn("安全更新", APPLE_CARD)
+        self.assertIn("重新啟動主機", APPLE_CARD)
+        self.assertIn('retain: false', APPLE_CARD)
+        self.assertIn('issued_at: Date.now()', APPLE_CARD)
+        self.assertIn("commandTopic:", APPLE_DASHBOARD)
+        self.assertNotIn('pill.textContent = live ? "●', APPLE_CARD)
+
+    def test_remote_maintenance_defaults_off_and_has_a_settings_toggle(self):
+        self.assertIn('ALLOW_REMOTE_ACTIONS="false"', SETUP)
+        self.assertIn("toggle_remote_actions", MANAGE)
+        self.assertIn("固定安全操作", MANAGE)
+        monitor = (
+            ROOT / "vps-monitor" / "vps_monitor.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("if not message.payload:", monitor)
+
+    def test_monitor_starts_after_local_runtime_services(self):
+        self.assertIn(
+            "After=network-online.target mosquitto.service docker.service",
+            MONITOR_SERVICE,
+        )
 
     def test_apple_assets_follow_install_upgrade_and_removal_lifecycle(self):
         for script in (SETUP, SENTINEL_UPGRADE):

@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -53,6 +54,127 @@ class MonitorParsingTests(unittest.TestCase):
             vps_monitor.parse_ip_metadata({"success": False}),
             {"country_code": "unknown", "provider": "unknown"},
         )
+
+    def test_maintenance_rejects_stale_or_extra_fields(self):
+        class FakeClient:
+            def __init__(self):
+                self.messages = []
+
+            def publish(self, topic, payload, **kwargs):
+                self.messages.append((topic, json.loads(payload), kwargs))
+
+        client = FakeClient()
+        controller = vps_monitor.MaintenanceController(
+            client,
+            enabled=True,
+            clock=lambda: 1000,
+            wall_clock=lambda: 2000,
+        )
+        stale = json.dumps({
+            "action": "reboot",
+            "request_id": "request-1",
+            "issued_at": 1000,
+        })
+        extra = json.dumps({
+            "action": "reboot",
+            "request_id": "request-2",
+            "issued_at": 2000000,
+            "command": "rm -rf /",
+        })
+        self.assertFalse(controller.submit(stale))
+        self.assertFalse(controller.submit(extra))
+        self.assertTrue(all(
+            message[1]["state"] == "rejected"
+            for message in client.messages
+        ))
+        self.assertFalse(controller.submit('["reboot"]'))
+
+    @patch.object(vps_monitor.threading, "Thread")
+    def test_maintenance_accepts_only_fresh_allowlisted_action(self, thread):
+        class FakeClient:
+            def publish(self, *_args, **_kwargs):
+                return None
+
+        controller = vps_monitor.MaintenanceController(
+            FakeClient(),
+            enabled=True,
+            clock=lambda: 1000,
+            wall_clock=lambda: 2000,
+        )
+        payload = json.dumps({
+            "action": "refresh",
+            "request_id": "request-3",
+            "issued_at": 2000000,
+        })
+        self.assertTrue(controller.submit(payload))
+        thread.assert_called_once()
+        thread.return_value.start.assert_called_once()
+
+    @patch.object(vps_monitor.threading, "Thread")
+    def test_maintenance_cooldown_only_blocks_the_same_action(self, thread):
+        class FakeClient:
+            def publish(self, *_args, **_kwargs):
+                return None
+
+        controller = vps_monitor.MaintenanceController(
+            FakeClient(),
+            enabled=True,
+            clock=lambda: 1000,
+            wall_clock=lambda: 2000,
+        )
+
+        def payload(action, request_id):
+            return json.dumps({
+                "action": action,
+                "request_id": request_id,
+                "issued_at": 2000000,
+            })
+
+        self.assertTrue(controller.submit(payload("refresh", "request-4")))
+        controller.busy = False
+        self.assertFalse(controller.submit(payload("refresh", "request-5")))
+        self.assertTrue(
+            controller.submit(payload("security_update", "request-6"))
+        )
+        self.assertEqual(thread.call_count, 2)
+
+    def test_maintenance_action_has_no_arbitrary_command_path(self):
+        success, message = vps_monitor.maintenance_result("shell")
+        self.assertFalse(success)
+        self.assertEqual(message, "不支援的維護操作")
+
+    def test_maintenance_is_disabled_by_default(self):
+        class FakeClient:
+            def __init__(self):
+                self.state = None
+
+            def publish(self, _topic, payload, **_kwargs):
+                self.state = json.loads(payload)["state"]
+
+        client = FakeClient()
+        controller = vps_monitor.MaintenanceController(
+            client,
+            enabled=False,
+        )
+        payload = json.dumps({
+            "action": "refresh",
+            "request_id": "request-disabled",
+            "issued_at": 0,
+        })
+        self.assertFalse(controller.submit(payload))
+        self.assertEqual(client.state, "disabled")
+
+    def test_maintenance_commands_run_in_isolated_transient_units(self):
+        refresh = vps_monitor.transient_command(
+            "vps-sentinel-refresh",
+            ["/usr/bin/apt-get", "update"],
+        )
+        self.assertEqual(refresh[0], "/usr/bin/systemd-run")
+        self.assertIn("--wait", refresh)
+        self.assertIn("--collect", refresh)
+        self.assertEqual(refresh[-2:], ["/usr/bin/apt-get", "update"])
+        self.assertNotIn("sh", refresh)
+        self.assertNotIn("-c", refresh)
 
     def test_development_version_has_safe_fallback(self):
         self.assertTrue(vps_monitor.installed_version())

@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.8.1";
+const CARD_VERSION = "0.9.0";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -60,7 +60,7 @@ class VpsSentinelAppleCard extends HTMLElement {
         }
         .header {
           display: flex;
-          align-items: end;
+          align-items: flex-end;
           justify-content: space-between;
           gap: 16px;
           margin-bottom: 22px;
@@ -68,41 +68,49 @@ class VpsSentinelAppleCard extends HTMLElement {
         .header-status {
           display: flex;
           flex: 0 0 auto;
-          flex-direction: column;
-          gap: 7px;
           align-items: flex-end;
         }
         .health-card {
           --health-color: var(--vs-green);
           display: grid;
-          grid-template-columns: auto auto;
-          gap: 10px;
+          grid-template-columns: auto minmax(0, 1fr);
+          gap: 9px;
           align-items: center;
-          min-width: 112px;
-          padding: 10px 13px;
-          border: 1px solid color-mix(in srgb, var(--health-color) 24%, transparent);
-          border-radius: 20px;
+          min-width: 108px;
+          padding: 9px 12px;
+          border: 1px solid color-mix(in srgb, var(--primary-text-color) 11%, transparent);
+          border-radius: 17px;
           background:
             linear-gradient(
-              135deg,
-              color-mix(in srgb, var(--health-color) 22%, transparent),
-              color-mix(in srgb, var(--vs-blue) 8%, transparent)
+              145deg,
+              color-mix(in srgb, var(--primary-text-color) 7%, transparent),
+              color-mix(in srgb, var(--card-background-color) 84%, transparent)
             );
-          box-shadow:
-            inset 0 1px 0 rgba(255,255,255,.05),
-            0 10px 30px color-mix(in srgb, var(--health-color) 9%, transparent);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.045);
           transition: border-color .35s ease, background .35s ease;
         }
         .health-card.warning { --health-color: var(--vs-orange); }
         .health-card.critical,
         .health-card.offline,
         .health-card.stale { --health-color: var(--vs-red); }
+        .health-card.warning,
+        .health-card.critical,
+        .health-card.offline,
+        .health-card.stale {
+          border-color: color-mix(in srgb, var(--health-color) 28%, transparent);
+          background:
+            linear-gradient(
+              145deg,
+              color-mix(in srgb, var(--health-color) 15%, transparent),
+              color-mix(in srgb, var(--card-background-color) 86%, transparent)
+            );
+        }
         .health-orb {
-          width: 10px;
-          height: 10px;
+          width: 9px;
+          height: 9px;
           border-radius: 50%;
           background: var(--health-color);
-          box-shadow: 0 0 16px color-mix(in srgb, var(--health-color) 75%, transparent);
+          box-shadow: 0 0 12px color-mix(in srgb, var(--health-color) 62%, transparent);
         }
         .health-copy { min-width: 0; }
         .eyebrow {
@@ -121,12 +129,16 @@ class VpsSentinelAppleCard extends HTMLElement {
           line-height: 1.05;
         }
         .status {
-          color: var(--health-color);
-          font-size: 13px;
-          font-weight: 700;
+          color: var(--primary-text-color);
+          font-size: 12px;
+          font-weight: 720;
           line-height: 1.2;
           white-space: nowrap;
         }
+        .health-card.warning .status,
+        .health-card.critical .status,
+        .health-card.offline .status,
+        .health-card.stale .status { color: var(--health-color); }
         .resources {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
@@ -201,12 +213,12 @@ class VpsSentinelAppleCard extends HTMLElement {
         .reporting {
           margin-top: 3px;
           color: var(--secondary-text-color);
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 620;
           line-height: 1.2;
           white-space: nowrap;
         }
-        .reporting.live { color: color-mix(in srgb, var(--vs-green) 82%, white); }
+        .reporting.live { color: var(--secondary-text-color); }
         .reporting.stale { color: var(--vs-red); }
         .section-title {
           margin: 22px 2px 10px;
@@ -313,9 +325,122 @@ class VpsSentinelAppleCard extends HTMLElement {
           text-overflow: ellipsis;
           white-space: nowrap;
         }
+        .maintenance {
+          display: none;
+          margin-top: 18px;
+          padding: 16px;
+          border: 1px solid color-mix(in srgb, var(--vs-blue) 18%, transparent);
+          border-radius: 22px;
+          background:
+            linear-gradient(
+              135deg,
+              color-mix(in srgb, var(--vs-blue) 10%, transparent),
+              color-mix(in srgb, var(--vs-purple) 8%, transparent),
+              color-mix(in srgb, var(--card-background-color) 90%, transparent)
+            );
+        }
+        .maintenance.visible { display: block; }
+        .maintenance-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 12px;
+        }
+        .maintenance-title { font-size: 14px; font-weight: 720; }
+        .maintenance-state {
+          overflow: hidden;
+          color: var(--secondary-text-color);
+          font-size: 11px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .actions {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          overflow: hidden;
+          border: 1px solid color-mix(in srgb, var(--primary-text-color) 11%, transparent);
+          border-radius: 16px;
+          background: color-mix(in srgb, var(--card-background-color) 78%, transparent);
+        }
+        .action {
+          min-width: 0;
+          padding: 12px 7px 11px;
+          border: 0;
+          border-radius: 0;
+          background:
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, var(--accent) 10%, transparent),
+              transparent 70%
+            );
+          box-shadow: inset 0 2px 0 color-mix(in srgb, var(--accent) 72%, transparent);
+          color: var(--primary-text-color);
+          font: inherit;
+          font-size: 12px;
+          font-weight: 680;
+          cursor: pointer;
+          transition: background .2s ease, opacity .2s ease;
+        }
+        .action + .action {
+          border-left: 1px solid color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+        }
+        .action:hover {
+          background: color-mix(in srgb, var(--accent) 13%, transparent);
+        }
+        .action:active {
+          background: color-mix(in srgb, var(--accent) 19%, transparent);
+        }
+        .action:disabled { cursor: wait; opacity: .45; }
+        dialog {
+          width: min(330px, calc(100% - 32px));
+          padding: 0;
+          border: 1px solid color-mix(in srgb, var(--primary-text-color) 13%, transparent);
+          border-radius: 24px;
+          background: var(--card-background-color);
+          color: var(--primary-text-color);
+          box-shadow: 0 24px 80px rgba(0,0,0,.42);
+        }
+        dialog::backdrop {
+          background: rgba(0,0,0,.48);
+          backdrop-filter: blur(8px);
+        }
+        .confirm-copy { padding: 22px 22px 14px; }
+        .confirm-title { margin-bottom: 8px; font-size: 20px; font-weight: 750; }
+        .confirm-message {
+          color: var(--secondary-text-color);
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        .confirm-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          border-top: 1px solid color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+        }
+        .confirm-actions button {
+          padding: 14px;
+          border: 0;
+          background: transparent;
+          color: var(--vs-blue);
+          font: inherit;
+          font-weight: 680;
+        }
+        .confirm-actions button + button {
+          border-left: 1px solid color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+        }
+        .confirm-actions .danger { color: var(--vs-red); }
         @media (max-width: 430px) {
           ha-card { padding: 16px; border-radius: 26px; }
-          .header { align-items: center; margin-bottom: 16px; }
+          .header { align-items: flex-end; margin-bottom: 16px; }
+          .header-status {
+            flex: 0 0 calc((100% - 16px) / 3);
+            width: calc((100% - 16px) / 3);
+          }
+          .health-card {
+            width: 100%;
+            min-width: 0;
+            padding-inline: 9px;
+          }
           .resources { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
           .resource { padding: 12px 10px; border-radius: 18px; }
           .resource-top { margin-bottom: 14px; }
@@ -325,6 +450,8 @@ class VpsSentinelAppleCard extends HTMLElement {
           .insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 340px) {
+          .header-status { flex-basis: auto; width: auto; }
+          .health-card { width: auto; }
           .resources { grid-template-columns: 1fr; }
         }
         @media (prefers-reduced-motion: reduce) {
@@ -362,6 +489,27 @@ class VpsSentinelAppleCard extends HTMLElement {
         <div class="section-title">系統資訊</div>
         <div class="insights"></div>
         <div class="alerts"></div>
+        <div class="maintenance">
+          <div class="maintenance-head">
+            <div class="maintenance-title">主機維護</div>
+            <div class="maintenance-state">等待操作</div>
+          </div>
+          <div class="actions">
+            <button class="action" data-action="refresh" style="--accent:var(--vs-blue)">檢查更新</button>
+            <button class="action" data-action="security_update" style="--accent:var(--vs-orange)">安全更新</button>
+            <button class="action" data-action="reboot" style="--accent:var(--vs-red)">重新啟動</button>
+          </div>
+        </div>
+        <dialog>
+          <div class="confirm-copy">
+            <div class="confirm-title"></div>
+            <div class="confirm-message"></div>
+          </div>
+          <div class="confirm-actions">
+            <button data-confirm="cancel">取消</button>
+            <button data-confirm="ok">繼續</button>
+          </div>
+        </dialog>
       </ha-card>`;
 
     const resources = [
@@ -376,9 +524,19 @@ class VpsSentinelAppleCard extends HTMLElement {
       reporting: this.shadowRoot.querySelector(".reporting"),
       alerts: this.shadowRoot.querySelector(".alerts"),
       identity: this.shadowRoot.querySelector(".identity"),
+      maintenance: this.shadowRoot.querySelector(".maintenance"),
+      maintenanceState: this.shadowRoot.querySelector(".maintenance-state"),
+      dialog: this.shadowRoot.querySelector("dialog"),
       resources: {},
       insights: {},
     };
+    for (const button of this.shadowRoot.querySelectorAll(".action")) {
+      button.addEventListener("click", () => this._confirmAction(button.dataset.action));
+    }
+    this.shadowRoot.querySelector('[data-confirm="cancel"]')
+      .addEventListener("click", () => this._nodes.dialog.close());
+    this.shadowRoot.querySelector('[data-confirm="ok"]')
+      .addEventListener("click", () => this._runConfirmedAction());
     this.shadowRoot.querySelector("h1").textContent =
       this._config.title || "主機狀態";
     for (const [key, label, color] of resources) {
@@ -446,7 +604,7 @@ class VpsSentinelAppleCard extends HTMLElement {
     const reporting = this._state(this._config.reporting)?.state;
     const pill = this._nodes.reporting;
     const live = reporting === "on";
-    pill.textContent = live ? "● 同步正常" : "● 同步中斷";
+    pill.textContent = live ? "同步正常" : "同步中斷";
     pill.className = `reporting ${live ? "live" : "stale"}`;
     healthCard.classList.toggle("stale", !live);
 
@@ -489,6 +647,82 @@ class VpsSentinelAppleCard extends HTMLElement {
       "visible",
       [country, provider, osName].some((value) => value !== "—"),
     );
+
+    const maintenanceEntity = this._state(this._config.maintenance);
+    const maintenance = this._nodes.maintenance;
+    const maintenanceVisible = Boolean(
+      this._config.commandTopic && maintenanceEntity,
+    );
+    maintenance.classList.toggle("visible", maintenanceVisible);
+    if (maintenanceVisible) {
+      const busy = maintenanceEntity.state === "running";
+      const message = maintenanceEntity.attributes?.message;
+      this._nodes.maintenanceState.textContent =
+        message || this._maintenanceLabel(maintenanceEntity.state);
+      for (const button of maintenance.querySelectorAll(".action")) {
+        button.disabled = busy;
+      }
+    }
+  }
+
+  _maintenanceLabel(state) {
+    return {
+      idle: "等待操作",
+      running: "處理中",
+      success: "已完成",
+      scheduled: "已排程",
+      failed: "執行失敗",
+      rejected: "操作遭拒",
+      cooldown: "請稍後再試",
+      busy: "已有操作執行中",
+    }[state] || "等待操作";
+  }
+
+  _confirmAction(action) {
+    const details = {
+      refresh: ["檢查更新", "只更新套件清單，不會安裝或重新啟動。"],
+      security_update: [
+        "安裝安全更新",
+        "只安裝 Ubuntu 安全更新；完成後可能會建議重新啟動。",
+      ],
+      reboot: [
+        "重新啟動主機",
+        "主機將在 30 秒後重新啟動，期間 Home Assistant 會暫時離線。",
+      ],
+    }[action];
+    if (!details) return;
+    this._pendingAction = action;
+    this._nodes.dialog.querySelector(".confirm-title").textContent = details[0];
+    this._nodes.dialog.querySelector(".confirm-message").textContent = details[1];
+    const confirm = this._nodes.dialog.querySelector('[data-confirm="ok"]');
+    confirm.textContent = action === "reboot" ? "重新啟動" : "繼續";
+    confirm.classList.toggle("danger", action === "reboot");
+    this._nodes.dialog.showModal();
+  }
+
+  async _runConfirmedAction() {
+    const action = this._pendingAction;
+    this._nodes.dialog.close();
+    if (!action || !this._config.commandTopic || !this._hass) return;
+    const requestId = globalThis.crypto?.randomUUID?.()
+      || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    try {
+      await this._hass.callService("mqtt", "publish", {
+        topic: this._config.commandTopic,
+        payload: JSON.stringify({
+          action,
+          request_id: requestId,
+          issued_at: Date.now(),
+        }),
+        qos: 1,
+        retain: false,
+      });
+      this._nodes.maintenanceState.textContent = "命令已送出";
+    } catch (_error) {
+      this._nodes.maintenanceState.textContent = "無法送出，請檢查 MQTT 權限";
+    } finally {
+      this._pendingAction = null;
+    }
   }
 
   _plainState(entityId, fallback = "—") {

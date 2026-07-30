@@ -148,8 +148,56 @@ show_settings() {
   echo "磁碟告警：$(read_env DISK_WARN_PERCENT 85)%"
   echo "監控服務：$(read_env WATCH_SERVICES 無)"
   echo "網路速率：$(read_env MONITOR_NETWORK false)"
+  if [[ "$(read_env ALLOW_REMOTE_ACTIONS false)" == "true" ]]; then
+    echo "遠端維護：已啟用（固定安全操作）"
+  else
+    echo "遠端維護：未啟用"
+  fi
   echo "MQTT：$(read_env MQTT_HOST 未設定):$(read_env MQTT_PORT 1883)"
   echo "MQTT 密碼：已隱藏"
+}
+
+toggle_remote_actions() {
+  local current next backup answer
+  if [[ ! -f "${ENV_FILE}" ]]; then
+    red "找不到監控設定，請先完成安裝。"
+    return
+  fi
+  current="$(read_env ALLOW_REMOTE_ACTIONS false)"
+  if [[ "${current}" == "true" ]]; then
+    next=false
+    read -r -p "要關閉 Home Assistant 遠端維護嗎？[y/N]：" answer
+  else
+    next=true
+    yellow "啟用後可從面板更新套件清單、安裝安全更新及重新啟動主機。"
+    yellow "不接受自訂指令，所有操作都有確認、冷卻與防重播保護。"
+    read -r -p "確定啟用嗎？[y/N]：" answer
+  fi
+  [[ "${answer,,}" =~ ^(y|yes|是)$ ]] || {
+    echo "未變更設定。"
+    return
+  }
+  if [[ "${next}" == "true" ]] &&
+     ! command -v unattended-upgrade >/dev/null 2>&1; then
+    echo "正在安裝 Ubuntu 官方安全更新工具……"
+    if ! apt-get update ||
+       ! apt-get install -y --no-install-recommends unattended-upgrades; then
+      red "安全更新工具安裝失敗，遠端維護未啟用。"
+      return 1
+    fi
+  fi
+  backup="${ENV_FILE}.backup.$(date +%Y%m%d-%H%M%S)"
+  cp -a "${ENV_FILE}" "${backup}"
+  set_env ALLOW_REMOTE_ACTIONS "${next}"
+  set_env COMMAND_COOLDOWN 300
+  if restart_monitor_or_rollback "${backup}"; then
+    rm -f -- "${backup}"
+    if [[ "${next}" == "true" ]]; then
+      green "遠端維護已啟用；重新套用 Apple 面板後即可使用。"
+    else
+      green "遠端維護已關閉。"
+    fi
+  fi
 }
 
 restart_monitor_or_rollback() {
@@ -507,6 +555,7 @@ settings_menu() {
     echo "  1. 查看目前設定"
     echo "  2. 切換資源模式"
     echo "  3. 調整告警門檻"
+    echo "  4. 遠端維護開關"
     echo "  0. 返回主選單"
     echo
     read -r -p "請選擇 [0]：" choice
@@ -514,8 +563,9 @@ settings_menu() {
       1) show_settings; pause_menu ;;
       2) change_profile; pause_menu ;;
       3) change_thresholds; pause_menu ;;
+      4) toggle_remote_actions; pause_menu ;;
       0) return ;;
-      *) yellow "請輸入 0 到 3。"; pause_menu ;;
+      *) yellow "請輸入 0 到 4。"; pause_menu ;;
     esac
   done
 }

@@ -174,7 +174,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
   ca-certificates curl git mosquitto mosquitto-clients openssl \
-  python3 python3-pip python3-venv
+  python3 python3-pip python3-venv unattended-upgrades
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "尚未安裝 Docker，正在安裝 Ubuntu/Debian 套件版本。"
@@ -475,6 +475,8 @@ else
     printf 'DISK_WARN_PERCENT="85"\n'
     printf 'OVERLOAD_SAMPLES="%s"\n' "${samples}"
     printf 'WATCH_SERVICES=%s\n' "$(env_quote "${services}")"
+    printf 'ALLOW_REMOTE_ACTIONS="false"\n'
+    printf 'COMMAND_COOLDOWN="300"\n'
   } > "${MONITOR_ENV}"
   chmod 0600 "${MONITOR_ENV}"
 fi
