@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.8.0";
+const CARD_VERSION = "0.8.1";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -50,8 +50,9 @@ class VpsSentinelAppleCard extends HTMLElement {
           border: 1px solid color-mix(in srgb, var(--primary-text-color) 12%, transparent);
           border-radius: clamp(24px, 5vw, 34px);
           background:
-            radial-gradient(circle at 8% 0%, rgba(10,132,255,.16), transparent 34%),
-            radial-gradient(circle at 92% 8%, rgba(191,90,242,.14), transparent 32%),
+            radial-gradient(circle at 5% 0%, rgba(10,132,255,.24), transparent 38%),
+            radial-gradient(circle at 96% 4%, rgba(191,90,242,.22), transparent 38%),
+            radial-gradient(circle at 55% 105%, rgba(48,209,88,.08), transparent 34%),
             color-mix(in srgb, var(--card-background-color) 88%, transparent);
           box-shadow: 0 20px 55px rgba(0,0,0,.16);
           backdrop-filter: saturate(150%) blur(24px);
@@ -71,6 +72,39 @@ class VpsSentinelAppleCard extends HTMLElement {
           gap: 7px;
           align-items: flex-end;
         }
+        .health-card {
+          --health-color: var(--vs-green);
+          display: grid;
+          grid-template-columns: auto auto;
+          gap: 10px;
+          align-items: center;
+          min-width: 112px;
+          padding: 10px 13px;
+          border: 1px solid color-mix(in srgb, var(--health-color) 24%, transparent);
+          border-radius: 20px;
+          background:
+            linear-gradient(
+              135deg,
+              color-mix(in srgb, var(--health-color) 22%, transparent),
+              color-mix(in srgb, var(--vs-blue) 8%, transparent)
+            );
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,.05),
+            0 10px 30px color-mix(in srgb, var(--health-color) 9%, transparent);
+          transition: border-color .35s ease, background .35s ease;
+        }
+        .health-card.warning { --health-color: var(--vs-orange); }
+        .health-card.critical,
+        .health-card.offline,
+        .health-card.stale { --health-color: var(--vs-red); }
+        .health-orb {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: var(--health-color);
+          box-shadow: 0 0 16px color-mix(in srgb, var(--health-color) 75%, transparent);
+        }
+        .health-copy { min-width: 0; }
         .eyebrow {
           margin-bottom: 4px;
           color: var(--secondary-text-color);
@@ -87,22 +121,11 @@ class VpsSentinelAppleCard extends HTMLElement {
           line-height: 1.05;
         }
         .status {
-          flex: 0 0 auto;
-          padding: 8px 12px;
-          border-radius: 999px;
-          background: color-mix(in srgb, var(--vs-green) 16%, transparent);
-          color: var(--vs-green);
+          color: var(--health-color);
           font-size: 13px;
           font-weight: 700;
-          transition: color .35s ease, background .35s ease;
-        }
-        .status.warning {
-          color: var(--vs-orange);
-          background: color-mix(in srgb, var(--vs-orange) 16%, transparent);
-        }
-        .status.critical, .status.offline {
-          color: var(--vs-red);
-          background: color-mix(in srgb, var(--vs-red) 16%, transparent);
+          line-height: 1.2;
+          white-space: nowrap;
         }
         .resources {
           display: grid;
@@ -175,21 +198,16 @@ class VpsSentinelAppleCard extends HTMLElement {
           box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 52%, transparent);
           transition: width .7s cubic-bezier(.22, 1, .36, 1);
         }
-        .footer {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-        .pill {
-          padding: 7px 10px;
-          border-radius: 999px;
-          background: color-mix(in srgb, var(--primary-text-color) 7%, transparent);
+        .reporting {
+          margin-top: 3px;
           color: var(--secondary-text-color);
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 620;
+          line-height: 1.2;
+          white-space: nowrap;
         }
-        .pill.live { color: var(--vs-green); }
-        .pill.stale { color: var(--vs-red); }
+        .reporting.live { color: color-mix(in srgb, var(--vs-green) 82%, white); }
+        .reporting.stale { color: var(--vs-red); }
         .section-title {
           margin: 22px 2px 10px;
           color: var(--secondary-text-color);
@@ -324,9 +342,12 @@ class VpsSentinelAppleCard extends HTMLElement {
             <h1></h1>
           </div>
           <div class="header-status">
-            <div class="status">讀取中</div>
-            <div class="footer">
-              <span class="pill reporting">同步中</span>
+            <div class="health-card">
+              <span class="health-orb"></span>
+              <div class="health-copy">
+                <div class="status">讀取中</div>
+                <div class="reporting">同步中</div>
+              </div>
             </div>
           </div>
         </div>
@@ -351,6 +372,7 @@ class VpsSentinelAppleCard extends HTMLElement {
     const container = this.shadowRoot.querySelector(".resources");
     this._nodes = {
       status: this.shadowRoot.querySelector(".status"),
+      healthCard: this.shadowRoot.querySelector(".health-card"),
       reporting: this.shadowRoot.querySelector(".reporting"),
       alerts: this.shadowRoot.querySelector(".alerts"),
       identity: this.shadowRoot.querySelector(".identity"),
@@ -412,19 +434,21 @@ class VpsSentinelAppleCard extends HTMLElement {
 
     const health = this._state(this._config.health)?.state ?? "資料不可用";
     const status = this._nodes.status;
+    const healthCard = this._nodes.healthCard;
     status.textContent = health;
-    status.className = "status";
-    if (health === "需要留意") status.classList.add("warning");
-    else if (health === "需要處理") status.classList.add("critical");
+    healthCard.className = "health-card";
+    if (health === "需要留意") healthCard.classList.add("warning");
+    else if (health === "需要處理") healthCard.classList.add("critical");
     else if (health === "unavailable" || health === "資料不可用") {
-      status.classList.add("offline");
+      healthCard.classList.add("offline");
     }
 
     const reporting = this._state(this._config.reporting)?.state;
     const pill = this._nodes.reporting;
     const live = reporting === "on";
     pill.textContent = live ? "● 同步正常" : "● 同步中斷";
-    pill.className = `pill reporting ${live ? "live" : "stale"}`;
+    pill.className = `reporting ${live ? "live" : "stale"}`;
+    healthCard.classList.toggle("stale", !live);
 
     const insightValues = {
       uptime: this._formatUptime(this._state(this._config.uptime)?.state),
