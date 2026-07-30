@@ -205,6 +205,7 @@ if [[ "${configure}" == "true" ]]; then
   prompt memory_warn "記憶體過載門檻（%）" "90"
   prompt disk_warn "磁碟不足門檻（%）" "85"
   prompt overload_samples "連續幾次超標才告警" "${overload_default}"
+  remote_actions=""
   prompt_yes_no remote_actions \
     "是否允許從 Home Assistant 執行安全更新與重新啟動" "no"
 
