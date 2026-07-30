@@ -143,7 +143,12 @@ def config_sensor(key, name, unit=None, device_class=None, state_class=None,
         "unique_id": f"{VPS_ID}_{key}",
         "default_entity_id": f"sensor.{VPS_ID}_{key}",
         "state_topic": STATE,
-        "value_template": f"{{{{ value_json.{key} }}}}",
+        # MQTT may still retain a payload from an older version that does not
+        # contain a newly added field. Return unknown until the next report
+        # instead of making the Home Assistant template fail.
+        "value_template": (
+            f"{{{{ value_json.get('{key}', 'unknown') }}}}"
+        ),
         "availability_topic": ONLINE,
         "payload_available": "ON",
         "payload_not_available": "OFF",
@@ -170,7 +175,9 @@ def config_binary(key, name, device_class="occupancy", available=True):
         "value_template": (
             "{{ 'OFF' if value == 'ON' else 'ON' }}"
             if key == "offline"
-            else f"{{{{ 'ON' if value_json.{key} else 'OFF' }}}}"
+            else (
+                f"{{{{ 'ON' if value_json.get('{key}', false) else 'OFF' }}}}"
+            )
         ),
         "payload_on": "ON",
         "payload_off": "OFF",
