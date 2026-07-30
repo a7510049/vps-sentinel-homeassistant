@@ -267,81 +267,172 @@ install_dashboard() {
   cat > "${DASHBOARD_FILE}" <<YAML
 title: VPS Sentinel
 views:
-  - title: 主機狀態
+  - type: sections
+    title: 主機狀態
     path: overview
     icon: mdi:server
-    cards:
-      - type: conditional
-        conditions:
-          - condition: state
-            entity: sensor.${vps_id}_health_status
-            state_not: 運作正常
-        card:
-          type: tile
-          entity: sensor.${vps_id}_health_status
-          name: 主機需要留意
-          color: orange
-      - type: markdown
-        content: |
-          ## 🖥️ 主機資源
-      - type: horizontal-stack
+    max_columns: 3
+    dense_section_placement: true
+    sections:
+      - type: grid
+        background:
+          color: indigo
+          opacity: 12
         cards:
-          - type: gauge
+          - type: heading
+            heading: 主機資源
+            heading_style: title
+            icon: mdi:server
+          - type: tile
             entity: sensor.${vps_id}_cpu_percent
             name: CPU
-            min: 0
-            max: 100
-            severity:
-              green: 0
-              yellow: 75
-              red: 90
-          - type: gauge
+            icon: mdi:cpu-64-bit
+            color: blue
+            vertical: false
+            features_position: bottom
+            features:
+              - type: bar-gauge
+                min: 0
+                max: 100
+            grid_options:
+              columns: full
+          - type: tile
             entity: sensor.${vps_id}_memory_percent
             name: 記憶體
-            min: 0
-            max: 100
-            severity:
-              green: 0
-              yellow: 75
-              red: 90
-          - type: gauge
+            icon: mdi:memory
+            color: purple
+            vertical: false
+            features_position: bottom
+            features:
+              - type: bar-gauge
+                min: 0
+                max: 100
+            grid_options:
+              columns: full
+          - type: tile
             entity: sensor.${vps_id}_disk_percent
             name: 磁碟
-            min: 0
-            max: 100
-            severity:
-              green: 0
-              yellow: 70
-              red: 85
-      - type: tile
-        entity: sensor.${vps_id}_uptime_hours
-        name: 已運作
-        color: blue
-      - type: markdown
-        content: |
-          ## 🛡️ 運作狀態
+            icon: mdi:harddisk
+            color: green
+            vertical: false
+            features_position: bottom
+            features:
+              - type: bar-gauge
+                min: 0
+                max: 100
+            grid_options:
+              columns: full
       - type: grid
-        columns: 2
-        square: false
+        background:
+          color: teal
+          opacity: 10
         cards:
+          - type: heading
+            heading: 運作狀態
+            heading_style: title
+            icon: mdi:shield-check
           - type: tile
             entity: sensor.${vps_id}_health_status
-            name: 整體狀態
+            name: 主機狀態
+            icon: mdi:check-circle
+            color: green
+            visibility:
+              - condition: state
+                entity: sensor.${vps_id}_health_status
+                state: 運作正常
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: sensor.${vps_id}_health_status
+            name: 主機狀態
+            icon: mdi:alert-circle
+            color: orange
+            visibility:
+              - condition: state
+                entity: sensor.${vps_id}_health_status
+                state: 需要留意
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: sensor.${vps_id}_health_status
+            name: 主機狀態
+            icon: mdi:alert-octagon
+            color: red
+            visibility:
+              - condition: state
+                entity: sensor.${vps_id}_health_status
+                state: 需要處理
+            grid_options:
+              columns: 6
           - type: tile
             entity: binary_sensor.${vps_id}_reporting
-            name: 資料更新
+            name: 資料回報
+            icon: mdi:cloud-check
+            color: teal
+            visibility:
+              - condition: state
+                entity: binary_sensor.${vps_id}_reporting
+                state: "on"
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: binary_sensor.${vps_id}_reporting
+            name: 資料已停止更新
+            icon: mdi:cloud-alert
+            color: red
+            visibility:
+              - condition: state
+                entity: binary_sensor.${vps_id}_reporting
+                state: unavailable
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: binary_sensor.${vps_id}_service_problem
+            name: 服務異常
+            icon: mdi:server-off
+            color: red
+            visibility:
+              - condition: state
+                entity: binary_sensor.${vps_id}_service_problem
+                state: "on"
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: binary_sensor.${vps_id}_reboot_required
+            name: 需要重新啟動
+            icon: mdi:restart-alert
+            color: orange
+            visibility:
+              - condition: state
+                entity: binary_sensor.${vps_id}_reboot_required
+                state: "on"
+            grid_options:
+              columns: 6
+      - type: grid
+        background:
+          color: purple
+          opacity: 10
+        cards:
+          - type: heading
+            heading: 系統資訊
+            heading_style: title
+            icon: mdi:server
+          - type: tile
+            entity: sensor.${vps_id}_uptime_hours
+            name: 已運作
+            color: cyan
           - type: tile
             entity: sensor.${vps_id}_security_updates
             name: 安全更新
+            color: indigo
           - type: tile
             entity: sensor.${vps_id}_docker_running
             name: 運作中容器
+            color: light-blue
           - type: tile
-            entity: binary_sensor.${vps_id}_service_problem
-            name: 服務狀態
-          - type: tile
-            entity: binary_sensor.${vps_id}_reboot_required
-            name: 重新啟動
+            entity: sensor.${vps_id}_boot_time
+            name: 最近開機
+            color: purple
 YAML
 
   if ! grep -q '^[[:space:]]*lovelace:' "${HA_CONFIG}"; then

@@ -15,8 +15,8 @@ SENTINEL_UPGRADE = (ROOT / "upgrade.sh").read_text(encoding="utf-8")
 
 
 class CommandInterfaceTests(unittest.TestCase):
-    def test_release_version_is_0_6_2(self):
-        self.assertEqual(VERSION, "0.6.2")
+    def test_release_version_is_0_7(self):
+        self.assertEqual(VERSION, "0.7.0")
 
     def test_header_does_not_use_width_sensitive_box_drawing(self):
         self.assertNotIn("╭", MANAGE)
@@ -34,6 +34,45 @@ class CommandInterfaceTests(unittest.TestCase):
         for entity in gauges:
             self.assertIn(entity, dashboard)
         self.assertNotIn("記憶體已使用", dashboard)
+
+    def test_dashboard_uses_responsive_native_sections(self):
+        dashboard = MANAGE.split(
+            'cat > "${DASHBOARD_FILE}" <<YAML', 1
+        )[1].split("\nYAML", 1)[0]
+        self.assertIn("- type: sections", dashboard)
+        self.assertIn("max_columns: 3", dashboard)
+        self.assertNotIn("type: horizontal-stack", dashboard)
+        self.assertEqual(dashboard.count("type: bar-gauge"), 3)
+
+    def test_dashboard_keeps_mobile_resources_compact(self):
+        dashboard = MANAGE.split(
+            'cat > "${DASHBOARD_FILE}" <<YAML', 1
+        )[1].split("\nYAML", 1)[0]
+        self.assertNotIn("path: resources", dashboard)
+        self.assertNotIn("type: trend-graph", dashboard)
+        self.assertNotIn("navigation_path:", dashboard)
+        self.assertEqual(dashboard.count("vertical: false"), 3)
+
+    def test_dashboard_only_shows_actionable_health_details(self):
+        dashboard = MANAGE.split(
+            'cat > "${DASHBOARD_FILE}" <<YAML', 1
+        )[1].split("\nYAML", 1)[0]
+        self.assertIn("name: 服務異常", dashboard)
+        self.assertIn("name: 需要重新啟動", dashboard)
+        self.assertIn("name: 資料已停止更新", dashboard)
+        self.assertNotIn("name: 重新啟動\n", dashboard)
+        for color in ["green", "teal", "orange", "red"]:
+            self.assertIn(f"color: {color}", dashboard)
+
+    def test_dashboard_sections_use_distinct_color_families(self):
+        dashboard = MANAGE.split(
+            'cat > "${DASHBOARD_FILE}" <<YAML', 1
+        )[1].split("\nYAML", 1)[0]
+        for color in ["indigo", "teal", "purple"]:
+            self.assertIn(
+                f"background:\n          color: {color}",
+                dashboard,
+            )
 
     def test_upgrade_version_comparison_stays_on_one_condition_line(self):
         self.assertIn(
