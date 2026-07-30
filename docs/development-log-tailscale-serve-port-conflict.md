@@ -1,22 +1,21 @@
 # 開發日誌：Tailscale Serve 與既有服務的 443 連接埠衝突
 
 > 日期：2026-07-30  
-> 適用情境：Home Assistant、Tailscale Serve 與其他 HTTPS 或代理服務部署在同一台 VPS
+> 適用情境：Home Assistant、Tailscale Serve 與其他網路服務部署在同一台 VPS
 
 ## 背景
 
 VPS Sentinel 預設可透過 Tailscale Serve，將本機的 Home Assistant
 `127.0.0.1:8123` 轉成只在 tailnet 內可使用的 HTTPS 網址。
 
-同一台 VPS 若已有反向代理、VPN、Web Server 或其他 HTTPS 服務，該服務
-通常會監聽標準 HTTPS 連接埠 `TCP 443`。當程式綁定 `0.0.0.0:443`、
-`[::]:443` 或 `*:443` 時，它會監聽所有網路介面，包括 VPS 的
-Tailscale 位址。
+同一台 VPS 若已有其他網路服務，它可能正在監聽標準 HTTPS 連接埠
+`TCP 443`。當程式綁定 `0.0.0.0:443`、`[::]:443` 或 `*:443` 時，
+它會監聽所有網路介面，包括 VPS 的 Tailscale 位址。
 
 兩項服務因此可能發生以下衝突：
 
 ```text
-既有 HTTPS／代理服務
+既有網路服務
 └── TCP *:443
     ├── VPS 一般網路介面
     └── Tailscale 網路介面
@@ -98,8 +97,8 @@ TCP *:443    <EXISTING_SERVICE>
 ```
 
 `*:443` 代表該程式不只監聽 VPS 的主要網路介面，也會接收送往
-Tailscale IP 的連線。Web Server、反向代理、VPN 或其他網路服務都可能
-產生相同衝突，判斷時應以實際監聽結果為準。
+Tailscale IP 的連線。任何使用相同 TCP 連接埠的程式都可能產生衝突，
+判斷時應以實際監聽結果為準。
 
 ## 最終解法
 
@@ -127,7 +126,7 @@ sudo ss -lntup | grep -E ':443|:8443'
 預期架構：
 
 ```text
-既有 HTTPS 服務    TCP 443
+既有網路服務       TCP 443
 Tailscale Serve    TCP 8443  →  127.0.0.1:8123
 Home Assistant     TCP 8123
 ```
@@ -158,7 +157,7 @@ sudo journalctl -u vps-monitor -n 30 --no-pager
   任何服務占用 `TCP 443`，應提示使用者保留既有服務，並提供 `8443`
   等替代選項。
 - 不應為了解決 Tailscale Serve 衝突而直接改動既有服務的監聽位址；
-  對正在使用的網站、反向代理或 VPN 而言，這可能造成即時中斷。
+  對正在使用的網路服務而言，這可能造成即時中斷。
 
 ## 安全提醒
 
