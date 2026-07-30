@@ -99,6 +99,11 @@ VPS 必須能主動連到 broker，但不需要把 VPS 的任何連接埠公開�
 若 broker 不在 VPN / 私網內，務必使用 TLS，不要將未加密的 1883
 直接開放到公網。
 
+同一台 VPS 若已有網站、反向代理、VPN 或其他 HTTPS 服務，標準
+`TCP 443` 可能與 Tailscale Serve 衝突。請參考
+**[開發日誌：Tailscale Serve 與既有服務的 443 連接埠衝突](docs/development-log-tailscale-serve-port-conflict.md)**，
+了解症狀、判斷方式及使用 `TCP 8443` 分流的完整紀錄。
+
 ## 🛠️ 只安裝 VPS Monitor
 
 如果已經有可用的 Home Assistant 與 MQTT broker，可以只安裝監控程式：
