@@ -24,6 +24,13 @@ jobs:
       - name: Check Blueprint YAML syntax
         run: ruby -e "require 'yaml'; Dir['home-assistant/blueprints/*.yaml'].each { |file| YAML.parse_file(file) }"
 
+      - name: Check dashboard YAML syntax
+        run: >-
+          ruby -e 'require "yaml";
+          source = File.read("manage.sh");
+          dashboard = source.match(/cat > "\$\{DASHBOARD_FILE\}" <<YAML\n(.*?)\nYAML/m).captures.first;
+          YAML.parse(dashboard.gsub("${vps_id}", "demo"))'
+
       - name: Install Python dependencies
         run: python3 -m pip install -r vps-monitor/requirements.txt
 

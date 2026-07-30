@@ -15,8 +15,8 @@ SENTINEL_UPGRADE = (ROOT / "upgrade.sh").read_text(encoding="utf-8")
 
 
 class CommandInterfaceTests(unittest.TestCase):
-    def test_release_version_is_0_6_2(self):
-        self.assertEqual(VERSION, "0.6.2")
+    def test_release_version_is_0_7(self):
+        self.assertEqual(VERSION, "0.7.0")
 
     def test_header_does_not_use_width_sensitive_box_drawing(self):
         self.assertNotIn("╭", MANAGE)
@@ -34,6 +34,16 @@ class CommandInterfaceTests(unittest.TestCase):
         for entity in gauges:
             self.assertIn(entity, dashboard)
         self.assertNotIn("記憶體已使用", dashboard)
+
+    def test_dashboard_uses_responsive_native_sections(self):
+        dashboard = MANAGE.split(
+            'cat > "${DASHBOARD_FILE}" <<YAML', 1
+        )[1].split("\nYAML", 1)[0]
+        self.assertIn("- type: sections", dashboard)
+        self.assertIn("max_columns: 3", dashboard)
+        self.assertIn("layout: responsive", dashboard)
+        self.assertNotIn("type: horizontal-stack", dashboard)
+        self.assertEqual(dashboard.count("type: bar-gauge"), 3)
 
     def test_upgrade_version_comparison_stays_on_one_condition_line(self):
         self.assertIn(
