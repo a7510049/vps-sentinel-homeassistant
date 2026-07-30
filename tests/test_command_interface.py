@@ -15,8 +15,25 @@ SENTINEL_UPGRADE = (ROOT / "upgrade.sh").read_text(encoding="utf-8")
 
 
 class CommandInterfaceTests(unittest.TestCase):
-    def test_release_version_is_0_6_1(self):
-        self.assertEqual(VERSION, "0.6.1")
+    def test_release_version_is_0_6_2(self):
+        self.assertEqual(VERSION, "0.6.2")
+
+    def test_header_does_not_use_width_sensitive_box_drawing(self):
+        self.assertNotIn("╭", MANAGE)
+        self.assertNotIn("╰", MANAGE)
+
+    def test_dashboard_gives_cpu_memory_and_disk_equal_priority(self):
+        dashboard = MANAGE.split(
+            'cat > "${DASHBOARD_FILE}" <<YAML', 1
+        )[1].split("\nYAML", 1)[0]
+        gauges = [
+            "sensor.${vps_id}_cpu_percent",
+            "sensor.${vps_id}_memory_percent",
+            "sensor.${vps_id}_disk_percent",
+        ]
+        for entity in gauges:
+            self.assertIn(entity, dashboard)
+        self.assertNotIn("記憶體已使用", dashboard)
 
     def test_upgrade_version_comparison_stays_on_one_condition_line(self):
         self.assertIn(
