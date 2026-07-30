@@ -41,6 +41,9 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn("_formatUptime", APPLE_CARD)
         self.assertIn("serviceProblem", APPLE_DASHBOARD)
         self.assertIn("rebootRequired", APPLE_DASHBOARD)
+        self.assertIn("_countryFlag", APPLE_CARD)
+        self.assertIn("provider:", APPLE_DASHBOARD)
+        self.assertIn("osName:", APPLE_DASHBOARD)
         self.assertNotIn("https://", APPLE_CARD)
 
     def test_apple_assets_follow_install_upgrade_and_removal_lifecycle(self):

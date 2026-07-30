@@ -7,7 +7,7 @@ readonly HA_CONFIG="${HA_DIR}/config/configuration.yaml"
 readonly DASHBOARD_FILE="${HA_DIR}/config/vps-sentinel-dashboard.yaml"
 readonly CARD_SOURCE="/opt/vps-monitor/vps-sentinel-apple-card.js"
 readonly CARD_TARGET="${HA_DIR}/config/www/vps-sentinel-apple-card.js"
-readonly RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.8.0-rc.4"
+readonly RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.8.0-rc.5"
 
 if [[ ${EUID} -ne 0 ]]; then
   echo "[錯誤] 請使用 sudo：sudo vps-sentinel-apple" >&2
@@ -175,6 +175,9 @@ views:
         bootTime: sensor.${vps_id}_boot_time
         serviceProblem: binary_sensor.${vps_id}_service_problem
         rebootRequired: binary_sensor.${vps_id}_reboot_required
+        country: sensor.${vps_id}_country_code
+        provider: sensor.${vps_id}_provider
+        osName: sensor.${vps_id}_os_name
 YAML
 
   if ! docker exec homeassistant python -m homeassistant \

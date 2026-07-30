@@ -231,6 +231,11 @@ Home Assistant 的深色或淺色模式。安裝工具會透過官方
 `vps-sentinel-dashboard.yaml`，通過 Home Assistant 設定檢查後才重新
 啟動；驗證或啟動失敗時會自動回復原設定。工具不直接修改 `.storage`。
 
+面板可顯示節點國旗、VPS 供應商與作業系統。國家與供應商預設於監控
+服務啟動時透過 `https://ipwho.is/` 查詢一次，不會把公網 IP 發布到
+MQTT。若不希望使用外部查詢，可在 `/etc/vps-monitor.env` 設定
+`IP_METADATA=false` 後重新啟動 `vps-monitor`。
+
 ## 🩺 健康檢查與安全修復
 
 健康檢查為按需執行，不會建立新的常駐服務，也不會增加平時的 CPU 或

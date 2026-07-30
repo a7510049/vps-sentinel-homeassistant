@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.8.0-rc.4";
+const CARD_VERSION = "0.8.0-rc.5";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -230,6 +230,37 @@ class VpsSentinelAppleCard extends HTMLElement {
           background: color-mix(in srgb, var(--vs-red) 16%, transparent);
           color: var(--vs-red);
         }
+        .identity {
+          display: none;
+          grid-template-columns: auto minmax(0, 1fr);
+          gap: 12px;
+          align-items: center;
+          margin-top: 12px;
+          padding: 13px 14px;
+          border-radius: 18px;
+          background: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
+        }
+        .identity.visible { display: grid; }
+        .flag {
+          font-size: 30px;
+          line-height: 1;
+        }
+        .identity-copy { min-width: 0; }
+        .provider {
+          overflow: hidden;
+          font-size: 14px;
+          font-weight: 720;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .os-name {
+          overflow: hidden;
+          margin-top: 3px;
+          color: var(--secondary-text-color);
+          font-size: 12px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
         @media (max-width: 430px) {
           ha-card { padding: 16px; border-radius: 26px; }
           .header { align-items: center; margin-bottom: 16px; }
@@ -267,6 +298,13 @@ class VpsSentinelAppleCard extends HTMLElement {
         <div class="section-title">系統資訊</div>
         <div class="insights"></div>
         <div class="alerts"></div>
+        <div class="identity">
+          <div class="flag">🌐</div>
+          <div class="identity-copy">
+            <div class="provider">—</div>
+            <div class="os-name">—</div>
+          </div>
+        </div>
       </ha-card>`;
 
     const resources = [
@@ -279,6 +317,7 @@ class VpsSentinelAppleCard extends HTMLElement {
       status: this.shadowRoot.querySelector(".status"),
       reporting: this.shadowRoot.querySelector(".reporting"),
       alerts: this.shadowRoot.querySelector(".alerts"),
+      identity: this.shadowRoot.querySelector(".identity"),
       resources: {},
       insights: {},
     };
@@ -377,6 +416,18 @@ class VpsSentinelAppleCard extends HTMLElement {
       "",
     );
     alerts.classList.toggle("visible", alerts.childElementCount > 0);
+
+    const country = this._plainState(this._config.country);
+    const provider = this._plainState(this._config.provider);
+    const osName = this._plainState(this._config.osName);
+    const identity = this._nodes.identity;
+    identity.querySelector(".flag").textContent = this._countryFlag(country);
+    identity.querySelector(".provider").textContent = provider;
+    identity.querySelector(".os-name").textContent = osName;
+    identity.classList.toggle(
+      "visible",
+      [country, provider, osName].some((value) => value !== "—"),
+    );
   }
 
   _plainState(entityId, fallback = "—") {
@@ -403,6 +454,13 @@ class VpsSentinelAppleCard extends HTMLElement {
       hour: "numeric",
       minute: "2-digit",
     }).format(date);
+  }
+
+  _countryFlag(code) {
+    if (!/^[A-Za-z]{2}$/.test(code)) return "🌐";
+    return [...code.toUpperCase()]
+      .map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0)))
+      .join("");
   }
 
   _appendAlert(container, entityId, label, className) {
