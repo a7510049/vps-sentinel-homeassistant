@@ -11,6 +11,7 @@ readonly UPGRADE_COMMAND="/usr/local/sbin/vps-sentinel-upgrade"
 readonly DOCTOR_COMMAND="/usr/local/sbin/vps-sentinel-doctor"
 readonly BACKUP_COMMAND="/usr/local/sbin/vps-sentinel-backup"
 readonly AUTOMATIONS_COMMAND="/usr/local/sbin/vps-sentinel-automations"
+readonly APPLE_COMMAND="/usr/local/sbin/vps-sentinel-apple"
 readonly VERSION_FILE="/opt/vps-monitor/.version"
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
@@ -525,17 +526,19 @@ home_assistant_menu() {
     show_header
     heading "🏠 Home Assistant"
     echo "  1. 建立或更新監控面板"
-    echo "  2. 管理通知與自動化模板"
-    echo "  3. 安全更新 Home Assistant"
+    echo "  2. 設定 Apple 風格面板"
+    echo "  3. 管理通知與自動化模板"
+    echo "  4. 安全更新 Home Assistant"
     echo "  0. 返回主選單"
     echo
     read -r -p "請選擇 [0]：" choice
     case "${choice:-0}" in
       1) install_dashboard; pause_menu ;;
-      2) run_tool "自動化模板工具" "${AUTOMATIONS_COMMAND}" || true; pause_menu ;;
-      3) run_tool "Home Assistant 更新" "${UPDATE_COMMAND}" || true; pause_menu ;;
+      2) run_tool "Apple 風格面板" "${APPLE_COMMAND}" || true; pause_menu ;;
+      3) run_tool "自動化模板工具" "${AUTOMATIONS_COMMAND}" || true; pause_menu ;;
+      4) run_tool "Home Assistant 更新" "${UPDATE_COMMAND}" || true; pause_menu ;;
       0) return ;;
-      *) yellow "請輸入 0 到 3。"; pause_menu ;;
+      *) yellow "請輸入 0 到 4。"; pause_menu ;;
     esac
   done
 }
@@ -577,6 +580,7 @@ print_help() {
   status       查看服務狀態
   settings     查看目前監控設定
   dashboard    建立或更新 Home Assistant 監控面板
+  apple        設定 Apple 風格面板
   doctor       執行健康檢查
   backup       開啟備份與還原工具
   upgrade      更新 VPS Sentinel
@@ -590,6 +594,7 @@ run_command() {
     status) show_status ;;
     settings) show_settings ;;
     dashboard) install_dashboard ;;
+    apple) run_tool "Apple 風格面板" "${APPLE_COMMAND}" ;;
     doctor) run_tool "健康檢查" "${DOCTOR_COMMAND}" ;;
     backup) run_tool "備份管理" "${BACKUP_COMMAND}" ;;
     upgrade) run_tool "VPS Sentinel 更新" "${UPGRADE_COMMAND}" ;;

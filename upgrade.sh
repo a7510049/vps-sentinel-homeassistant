@@ -12,6 +12,7 @@ readonly UPGRADE_COMMAND="/usr/local/sbin/vps-sentinel-upgrade"
 readonly DOCTOR_COMMAND="/usr/local/sbin/vps-sentinel-doctor"
 readonly BACKUP_COMMAND="/usr/local/sbin/vps-sentinel-backup"
 readonly AUTOMATIONS_COMMAND="/usr/local/sbin/vps-sentinel-automations"
+readonly APPLE_COMMAND="/usr/local/sbin/vps-sentinel-apple"
 
 green()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 yellow() { printf '\033[1;33m⚠ %s\033[0m\n' "$*"; }
@@ -93,12 +94,13 @@ if [[ -z "${source_dir}" ]]; then
   exit 1
 fi
 for file in VERSION manage.sh update.sh uninstall.sh upgrade.sh doctor.sh \
-  backup.sh automations.sh \
+  backup.sh automations.sh apple-dashboard.sh \
   vps-monitor/vps_monitor.py vps-monitor/requirements.txt \
   vps-monitor/vps-monitor.service \
   home-assistant/blueprints/problem-notification.yaml \
   home-assistant/blueprints/offline-notification.yaml \
-  home-assistant/blueprints/daily-summary.yaml; do
+  home-assistant/blueprints/daily-summary.yaml \
+  home-assistant/www/vps-sentinel-apple-card.js; do
   if [[ ! -f "${source_dir}/${file}" ]]; then
     red "下載內容缺少 ${file}，已取消升級。"
     exit 1
@@ -112,7 +114,7 @@ fi
 bash -n "${source_dir}/manage.sh" "${source_dir}/update.sh" \
   "${source_dir}/uninstall.sh" "${source_dir}/upgrade.sh" \
   "${source_dir}/doctor.sh" "${source_dir}/backup.sh" \
-  "${source_dir}/automations.sh"
+  "${source_dir}/automations.sh" "${source_dir}/apple-dashboard.sh"
 python3 -m py_compile "${source_dir}/vps-monitor/vps_monitor.py"
 green "下載內容與基本語法檢查完成"
 
@@ -123,10 +125,12 @@ cp -a "${INSTALL_DIR}/vps_monitor.py" "${backup}/" 2>/dev/null || true
 cp -a "${INSTALL_DIR}/requirements.txt" "${backup}/" 2>/dev/null || true
 cp -a "${INSTALL_DIR}/.requirements.sha256" "${backup}/" 2>/dev/null || true
 cp -a "${INSTALL_DIR}/.version" "${backup}/" 2>/dev/null || true
+cp -a "${INSTALL_DIR}/vps-sentinel-apple-card.js" \
+  "${backup}/" 2>/dev/null || true
 cp -a "${SERVICE_FILE}" "${backup}/vps-monitor.service" 2>/dev/null || true
 for file in "${MANAGE_COMMAND}" "${UPDATE_COMMAND}" \
   "${UNINSTALL_COMMAND}" "${UPGRADE_COMMAND}" "${DOCTOR_COMMAND}" \
-  "${BACKUP_COMMAND}" "${AUTOMATIONS_COMMAND}"; do
+  "${BACKUP_COMMAND}" "${AUTOMATIONS_COMMAND}" "${APPLE_COMMAND}"; do
   [[ -e "${file}" ]] && cp -a "${file}" "${backup}/$(basename "${file}")"
 done
 [[ ! -d "${INSTALL_DIR}/blueprints" ]] ||
@@ -145,11 +149,17 @@ rollback() {
       "${INSTALL_DIR}/.requirements.sha256"
   [[ ! -f "${backup}/.version" ]] ||
     install -m 0644 "${backup}/.version" "${INSTALL_DIR}/.version"
+  if [[ -f "${backup}/vps-sentinel-apple-card.js" ]]; then
+    install -m 0644 "${backup}/vps-sentinel-apple-card.js" \
+      "${INSTALL_DIR}/vps-sentinel-apple-card.js"
+  else
+    rm -f -- "${INSTALL_DIR}/vps-sentinel-apple-card.js"
+  fi
   [[ ! -f "${backup}/vps-monitor.service" ]] ||
     install -m 0644 "${backup}/vps-monitor.service" "${SERVICE_FILE}"
   for name in vps-sentinel vps-sentinel-update vps-sentinel-uninstall \
     vps-sentinel-upgrade vps-sentinel-doctor vps-sentinel-backup \
-    vps-sentinel-automations; do
+    vps-sentinel-automations vps-sentinel-apple; do
     if [[ -f "${backup}/${name}" ]]; then
       install -m 0755 "${backup}/${name}" "/usr/local/sbin/${name}"
     else
@@ -201,6 +211,10 @@ install -m 0755 "${source_dir}/upgrade.sh" "${UPGRADE_COMMAND}"
 install -m 0755 "${source_dir}/doctor.sh" "${DOCTOR_COMMAND}"
 install -m 0755 "${source_dir}/backup.sh" "${BACKUP_COMMAND}"
 install -m 0755 "${source_dir}/automations.sh" "${AUTOMATIONS_COMMAND}"
+install -m 0755 "${source_dir}/apple-dashboard.sh" "${APPLE_COMMAND}"
+install -m 0644 \
+  "${source_dir}/home-assistant/www/vps-sentinel-apple-card.js" \
+  "${INSTALL_DIR}/vps-sentinel-apple-card.js"
 install -d -m 0755 "${INSTALL_DIR}/blueprints"
 install -m 0644 "${source_dir}"/home-assistant/blueprints/*.yaml \
   "${INSTALL_DIR}/blueprints/"

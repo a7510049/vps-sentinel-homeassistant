@@ -12,11 +12,36 @@ SUBTOOLS = {
 }
 HA_UPDATE = (ROOT / "update.sh").read_text(encoding="utf-8")
 SENTINEL_UPGRADE = (ROOT / "upgrade.sh").read_text(encoding="utf-8")
+APPLE_DASHBOARD = (ROOT / "apple-dashboard.sh").read_text(encoding="utf-8")
+APPLE_CARD = (
+    ROOT / "home-assistant" / "www" / "vps-sentinel-apple-card.js"
+).read_text(encoding="utf-8")
+SETUP = (ROOT / "setup.sh").read_text(encoding="utf-8")
+UNINSTALL = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
 
 
 class CommandInterfaceTests(unittest.TestCase):
-    def test_release_version_is_0_7(self):
-        self.assertEqual(VERSION, "0.7.0")
+    def test_release_version_is_0_8(self):
+        self.assertEqual(VERSION, "0.8.0")
+
+    def test_apple_dashboard_preserves_storage_and_native_fallback(self):
+        self.assertNotIn(".storage", APPLE_DASHBOARD.split("不會直接修改", 1)[0])
+        self.assertIn("sudo vps-sentinel dashboard", APPLE_DASHBOARD)
+        self.assertIn("--apply", APPLE_DASHBOARD)
+
+    def test_apple_card_is_self_contained_and_responsive(self):
+        self.assertIn("class VpsSentinelAppleCard", APPLE_CARD)
+        self.assertIn("repeat(auto-fit", APPLE_CARD)
+        self.assertIn("prefers-reduced-motion", APPLE_CARD)
+        self.assertIn("-apple-system", APPLE_CARD)
+        self.assertNotIn("https://", APPLE_CARD)
+
+    def test_apple_assets_follow_install_upgrade_and_removal_lifecycle(self):
+        for script in (SETUP, SENTINEL_UPGRADE):
+            self.assertIn("apple-dashboard.sh", script)
+            self.assertIn("vps-sentinel-apple-card.js", script)
+        self.assertIn("vps-sentinel-apple", UNINSTALL)
+        self.assertIn('rm -f -- "${backup}"', APPLE_DASHBOARD)
 
     def test_header_does_not_use_width_sensitive_box_drawing(self):
         self.assertNotIn("╭", MANAGE)
