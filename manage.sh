@@ -107,15 +107,10 @@ show_header() {
   local version
   version="$(cat "${VERSION_FILE}" 2>/dev/null || printf '開發版')"
   clear
-  printf '%s' "${C_PURPLE}"
-  cat <<'BANNER'
-╭────────────────────────────────────────╮
-│  🖥️  VPS Sentinel                     │
-│  輕量、安心的 VPS 狀態監控             │
-╰────────────────────────────────────────╯
-BANNER
-  printf '%s' "${C_RESET}"
-  printf '  版本 %-10s  監控 %-8s  MQTT %s\n' \
+  printf '%s🖥️  VPS Sentinel%s\n' "${C_PURPLE}" "${C_RESET}"
+  printf '輕量、安心的 VPS 狀態監控\n'
+  printf '%s\n' '----------------------------------------'
+  printf '版本 %s｜監控 %s｜MQTT %s\n' \
     "${version}" "$(service_state vps-monitor)" "$(service_state mosquitto)"
   echo
 }
@@ -292,6 +287,15 @@ views:
       - type: horizontal-stack
         cards:
           - type: gauge
+            entity: sensor.${vps_id}_cpu_percent
+            name: CPU
+            min: 0
+            max: 100
+            severity:
+              green: 0
+              yellow: 75
+              red: 90
+          - type: gauge
             entity: sensor.${vps_id}_memory_percent
             name: 記憶體
             min: 0
@@ -309,25 +313,10 @@ views:
               green: 0
               yellow: 70
               red: 85
-      - type: markdown
-        content: >-
-          記憶體已使用
-          **{{ state_attr('sensor.${vps_id}_memory_percent', 'used_gb') }} GB**
-          ／ {{ state_attr('sensor.${vps_id}_memory_percent', 'total_gb') }} GB
-          · 磁碟剩餘
-          **{{ state_attr('sensor.${vps_id}_disk_percent', 'free_gb') }} GB**
-      - type: grid
-        columns: 2
-        square: false
-        cards:
-          - type: tile
-            entity: sensor.${vps_id}_cpu_percent
-            name: CPU
-            color: blue
-          - type: tile
-            entity: sensor.${vps_id}_uptime_hours
-            name: 已運作
-            color: blue
+      - type: tile
+        entity: sensor.${vps_id}_uptime_hours
+        name: 已運作
+        color: blue
       - type: markdown
         content: |
           ## 🛡️ 運作狀態
