@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.8.0-rc.6";
+const CARD_VERSION = "0.8.0";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -63,6 +63,13 @@ class VpsSentinelAppleCard extends HTMLElement {
           justify-content: space-between;
           gap: 16px;
           margin-bottom: 22px;
+        }
+        .header-status {
+          display: flex;
+          flex: 0 0 auto;
+          flex-direction: column;
+          gap: 7px;
+          align-items: flex-end;
         }
         .eyebrow {
           margin-bottom: 4px;
@@ -172,7 +179,6 @@ class VpsSentinelAppleCard extends HTMLElement {
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
-          margin-top: 16px;
         }
         .pill {
           padding: 7px 10px;
@@ -317,15 +323,14 @@ class VpsSentinelAppleCard extends HTMLElement {
             <div class="eyebrow">VPS SENTINEL</div>
             <h1></h1>
           </div>
-          <div class="status">讀取中</div>
+          <div class="header-status">
+            <div class="status">讀取中</div>
+            <div class="footer">
+              <span class="pill reporting">同步中</span>
+            </div>
+          </div>
         </div>
         <div class="resources"></div>
-        <div class="footer">
-          <span class="pill reporting">資料讀取中</span>
-        </div>
-        <div class="section-title">系統資訊</div>
-        <div class="insights"></div>
-        <div class="alerts"></div>
         <div class="identity">
           <div class="flag">🌐</div>
           <div class="identity-copy">
@@ -333,6 +338,9 @@ class VpsSentinelAppleCard extends HTMLElement {
             <div class="os-name">—</div>
           </div>
         </div>
+        <div class="section-title">系統資訊</div>
+        <div class="insights"></div>
+        <div class="alerts"></div>
       </ha-card>`;
 
     const resources = [
@@ -415,7 +423,7 @@ class VpsSentinelAppleCard extends HTMLElement {
     const reporting = this._state(this._config.reporting)?.state;
     const pill = this._nodes.reporting;
     const live = reporting === "on";
-    pill.textContent = live ? "● 資料持續更新" : "● 資料已停止更新";
+    pill.textContent = live ? "● 同步正常" : "● 同步中斷";
     pill.className = `pill reporting ${live ? "live" : "stale"}`;
 
     const insightValues = {

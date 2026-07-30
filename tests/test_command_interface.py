@@ -29,6 +29,10 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn("sudo vps-sentinel dashboard", APPLE_DASHBOARD)
         self.assertIn("--apply", APPLE_DASHBOARD)
         self.assertIn("新增一筆儀表板資源", APPLE_DASHBOARD)
+        self.assertIn(
+            'RESOURCE_URL="/local/vps-sentinel-apple-card.js"',
+            APPLE_DASHBOARD,
+        )
         self.assertIn("remove_legacy_auto_module", APPLE_DASHBOARD)
         self.assertNotIn("register_frontend_module", APPLE_DASHBOARD)
 
