@@ -33,7 +33,7 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn("--apply", APPLE_DASHBOARD)
         self.assertIn("新增一筆儀表板資源", APPLE_DASHBOARD)
         self.assertIn(
-            'RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.9"',
+            'RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.9.0"',
             APPLE_DASHBOARD,
         )
         self.assertIn("remove_legacy_auto_module", APPLE_DASHBOARD)
