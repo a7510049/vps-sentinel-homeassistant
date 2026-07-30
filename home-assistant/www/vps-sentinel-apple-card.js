@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.8.0-rc.5";
+const CARD_VERSION = "0.8.0-rc.6";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -108,7 +108,12 @@ class VpsSentinelAppleCard extends HTMLElement {
           padding: 16px;
           border: 1px solid color-mix(in srgb, var(--primary-text-color) 10%, transparent);
           border-radius: 22px;
-          background: color-mix(in srgb, var(--card-background-color) 82%, transparent);
+          background:
+            linear-gradient(
+              145deg,
+              color-mix(in srgb, var(--accent) 12%, transparent),
+              color-mix(in srgb, var(--card-background-color) 88%, transparent) 58%
+            );
           cursor: pointer;
           transition: transform .22s ease, background .22s ease;
         }
@@ -194,8 +199,14 @@ class VpsSentinelAppleCard extends HTMLElement {
         .insight {
           min-width: 0;
           padding: 13px 14px;
+          border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
           border-radius: 18px;
-          background: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
+          background:
+            linear-gradient(
+              145deg,
+              color-mix(in srgb, var(--accent) 15%, transparent),
+              color-mix(in srgb, var(--card-background-color) 86%, transparent)
+            );
           cursor: pointer;
         }
         .insight-label {
@@ -210,6 +221,16 @@ class VpsSentinelAppleCard extends HTMLElement {
           font-weight: 720;
           text-overflow: ellipsis;
           white-space: nowrap;
+        }
+        .insight-label::before {
+          display: inline-block;
+          width: 7px;
+          height: 7px;
+          margin-right: 7px;
+          border-radius: 50%;
+          background: var(--accent);
+          box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 65%, transparent);
+          content: "";
         }
         .alerts {
           display: none;
@@ -238,7 +259,14 @@ class VpsSentinelAppleCard extends HTMLElement {
           margin-top: 12px;
           padding: 13px 14px;
           border-radius: 18px;
-          background: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
+          border: 1px solid color-mix(in srgb, var(--vs-blue) 18%, transparent);
+          background:
+            linear-gradient(
+              110deg,
+              color-mix(in srgb, var(--vs-blue) 14%, transparent),
+              color-mix(in srgb, var(--vs-purple) 12%, transparent),
+              color-mix(in srgb, var(--card-background-color) 88%, transparent)
+            );
         }
         .identity.visible { display: grid; }
         .flag {
@@ -337,15 +365,16 @@ class VpsSentinelAppleCard extends HTMLElement {
       this._nodes.resources[key] = node;
     }
     const insights = [
-      ["uptime", "已運作"],
-      ["updates", "安全更新"],
-      ["containers", "運作中容器"],
-      ["bootTime", "最近開機"],
+      ["uptime", "連續運作", "var(--vs-blue)"],
+      ["updates", "待更新", "var(--vs-orange)"],
+      ["containers", "容器", "#64d2ff"],
+      ["bootTime", "上次開機", "var(--vs-purple)"],
     ];
     const insightContainer = this.shadowRoot.querySelector(".insights");
-    for (const [key, label] of insights) {
+    for (const [key, label, color] of insights) {
       const node = document.createElement("div");
       node.className = "insight";
+      node.style.setProperty("--accent", color);
       node.innerHTML =
         '<div class="insight-label"></div><div class="insight-value">—</div>';
       node.querySelector(".insight-label").textContent = label;
