@@ -7,7 +7,7 @@ readonly HA_CONFIG="${HA_DIR}/config/configuration.yaml"
 readonly DASHBOARD_FILE="${HA_DIR}/config/vps-sentinel-dashboard.yaml"
 readonly CARD_SOURCE="/opt/vps-monitor/vps-sentinel-apple-card.js"
 readonly CARD_TARGET="${HA_DIR}/config/www/vps-sentinel-apple-card.js"
-readonly RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.9.3"
+readonly RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.9.4"
 
 if [[ ${EUID} -ne 0 ]]; then
   echo "[錯誤] 請使用 sudo：sudo vps-sentinel-apple" >&2
