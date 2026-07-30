@@ -430,11 +430,13 @@ if (!customElements.get("vps-sentinel-apple-card")) {
 }
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "vps-sentinel-apple-card",
-  name: "VPS Sentinel Apple Card",
-  description: "自適應、低負載的 VPS 狀態卡片",
-  preview: true,
-});
+if (!window.customCards.some((card) => card.type === "vps-sentinel-apple-card")) {
+  window.customCards.push({
+    type: "vps-sentinel-apple-card",
+    name: "VPS Sentinel Apple Card",
+    description: "自適應、低負載的 VPS 狀態卡片",
+    preview: true,
+  });
+}
 
 console.info(`%c VPS Sentinel Apple Card ${CARD_VERSION} `, "color:#0a84ff;font-weight:700");
