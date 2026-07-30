@@ -168,14 +168,24 @@ sudo bash setup.sh
 
 維護中心可以：
 
-- 查看服務狀態與目前設定
-- 切換資源模式，調整 CPU、記憶體與磁碟告警門檻
-- 建立或更新 Home Assistant 儀表板
-- 安裝 Home Assistant 自動化 Blueprint
-- 執行健康檢查、安全修復與匿名診斷
-- 建立、清理或還原設定備份
-- 安全更新 VPS Sentinel 與 Home Assistant
-- 開啟完整移除工具
+- 📊 系統總覽：查看監控、MQTT、Docker 與 Home Assistant 狀態
+- ⚙️ 監控設定：切換資源模式，調整 CPU、記憶體與磁碟告警門檻
+- 🏠 Home Assistant：管理監控面板、自動化模板與安全更新
+- 🧰 系統維護：健康檢查、備份還原、版本更新與完整移除
+
+所有子選單都以 `0` 返回上一層，直接按 Enter 會採用畫面標示的預設
+選項。完整移除等高影響操作會先說明用途，並在真正刪除前再次確認。
+
+若只想快速查詢或執行特定工具，也可以使用子指令：
+
+```bash
+sudo vps-sentinel status
+sudo vps-sentinel settings
+sudo vps-sentinel doctor
+sudo vps-sentinel backup
+sudo vps-sentinel upgrade
+sudo vps-sentinel help
+```
 
 設定變更前會自動備份；若監控服務無法重新啟動，會立即回復原設定。
 
@@ -195,7 +205,10 @@ sudo vps-sentinel-upgrade
 sudo vps-sentinel-update
 ```
 
-兩種更新都只保留最近三份自動備份，避免長期占用 VPS 磁碟空間。
+兩種更新在確認服務恢復後，只保留最近一份專案專用的回復備份；
+Home Assistant 更新使用的舊映像標籤也會一併移除，避免長期占用 VPS
+磁碟空間。更新失敗時不會提前清理，確保自動回復仍有可用資料。
+工具不會執行全域 Docker 清理，也不會刪除其他服務的映像或備份。
 重新執行 `setup.sh` 不會自動升級 Home Assistant，避免調整監控設定時
 意外變更正在運行的版本。
 

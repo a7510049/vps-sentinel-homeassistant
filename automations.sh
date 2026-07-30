@@ -75,17 +75,17 @@ while true; do
   clear
   printf '\033[1;35m'
   cat <<'BANNER'
-========================================================
- Home Assistant 自動化模板
-========================================================
+╭────────────────────────────────────────╮
+│  🔔 Home Assistant 通知與自動化        │
+╰────────────────────────────────────────╯
 BANNER
   printf '\033[0m'
-  echo "  1) 安裝或更新推薦模板"
-  echo "  2) 查看模板狀態"
-  echo "  3) 移除模板檔案"
-  echo "  0) 返回"
-  read -r -p "請選擇：" choice
-  case "${choice}" in
+  echo "  1. 安裝或更新推薦模板"
+  echo "  2. 查看模板狀態"
+  echo "  3. 移除模板檔案"
+  echo "  0. 返回上一層"
+  read -r -p "請選擇 [0]：" choice
+  case "${choice:-0}" in
     1) install_blueprints ;;
     2) show_status ;;
     3) remove_blueprints ;;
@@ -93,5 +93,5 @@ BANNER
     *) yellow "請輸入 0 到 3。" ;;
   esac
   echo
-  read -r -p "按 Enter 繼續……" _
+  read -r -p "按 Enter 返回模板管理……" _
 done

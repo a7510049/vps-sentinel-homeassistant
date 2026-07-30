@@ -31,4 +31,8 @@ jobs:
         run: python3 -m unittest discover -s tests -v
 
       - name: Check Python syntax
-        run: python3 -m py_compile vps-monitor/vps_monitor.py tests/test_vps_monitor.py
+        run: >-
+          python3 -m py_compile
+          vps-monitor/vps_monitor.py
+          tests/test_vps_monitor.py
+          tests/test_command_interface.py

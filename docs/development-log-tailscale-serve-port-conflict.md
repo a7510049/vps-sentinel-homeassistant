@@ -1,6 +1,6 @@
 # 開發日誌：Tailscale Serve 與既有服務的 443 連接埠衝突
 
-> 日期：2026-07-30  
+> 日期：2026-07-30
 > 適用情境：Home Assistant、Tailscale Serve 與其他網路服務部署在同一台 VPS
 
 ## 背景

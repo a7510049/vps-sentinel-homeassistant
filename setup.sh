@@ -111,10 +111,10 @@ backup_if_exists() {
 clear
 printf '\033[1;35m'
 cat <<'BANNER'
-========================================================
- VPS Monitor 一條龍中文安裝器
- Mosquitto + Home Assistant + VPS 狀態監控
-========================================================
+╭────────────────────────────────────────────╮
+│  🖥️  VPS Sentinel 一條龍安裝              │
+│  MQTT、Home Assistant 與 VPS 狀態監控      │
+╰────────────────────────────────────────────╯
 BANNER
 printf '\033[0m'
 echo
@@ -124,7 +124,7 @@ echo "  2. Home Assistant Container"
 echo "  3. VPS Monitor 與開機自動啟動"
 echo "  4. localhost-only MQTT 安全設定與服務檢查"
 echo
-echo "不會修改 UFW、雲端防火牆或 3X-UI 連接埠。"
+echo "不會修改 UFW、雲端防火牆或既有服務的連接埠。"
 
 proceed=""
 ask_yes_no proceed "是否開始" "yes"
@@ -573,7 +573,14 @@ fi
 echo "  TLS：關閉"
 echo
 echo "完成 MQTT 整合後，VPS 裝置會自動出現。"
-echo "日後維護與調整：sudo vps-sentinel"
+echo
+echo "日後只要執行 sudo vps-sentinel，即可進入中文維護中心："
+echo "  📊 查看系統狀態"
+echo "  ⚙️  調整監控設定"
+echo "  🏠 管理 Home Assistant"
+echo "  🧰 更新、備份、修復或移除"
+echo
+echo "快速查看狀態：sudo vps-sentinel status"
 echo "一鍵健康檢查：sudo vps-sentinel-doctor"
 echo "日後更新 Home Assistant：sudo vps-sentinel-update"
 echo "日後完整移除：sudo vps-sentinel-uninstall"
