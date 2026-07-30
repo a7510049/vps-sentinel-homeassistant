@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.9.0";
+const CARD_VERSION = "0.9.1";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -43,6 +43,11 @@ class VpsSentinelAppleCard extends HTMLElement {
           --vs-green: #30d158;
           --vs-orange: #ff9f0a;
           --vs-red: #ff453a;
+          animation: vs-card-in .42s cubic-bezier(.22, 1, .36, 1) both;
+        }
+        @keyframes vs-card-in {
+          from { opacity: 0; transform: translateY(8px) scale(.992); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
         ha-card {
           overflow: hidden;
@@ -157,11 +162,15 @@ class VpsSentinelAppleCard extends HTMLElement {
               color-mix(in srgb, var(--card-background-color) 88%, transparent) 58%
             );
           cursor: pointer;
-          transition: transform .22s ease, background .22s ease;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+          transition: transform .22s ease, background .22s ease, border-color .22s ease, box-shadow .22s ease;
+          will-change: transform;
         }
         .resource:active { transform: scale(.975); }
         .resource:hover {
           background: color-mix(in srgb, var(--card-background-color) 94%, transparent);
+          border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+          box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 12%, transparent), inset 0 1px 0 rgba(255,255,255,.045);
         }
         .resource-top {
           display: flex;
@@ -244,6 +253,13 @@ class VpsSentinelAppleCard extends HTMLElement {
               color-mix(in srgb, var(--card-background-color) 86%, transparent)
             );
           cursor: pointer;
+          transition: transform .2s ease, border-color .2s ease, background .2s ease;
+        }
+        .insight:hover {
+          transform: translateY(-1px);
+          border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+        }
+        .insight:active { transform: scale(.985); }
         }
         .insight-label {
           margin-bottom: 5px;
@@ -345,13 +361,49 @@ class VpsSentinelAppleCard extends HTMLElement {
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          margin-bottom: 12px;
+          margin-bottom: 10px;
         }
         .maintenance-title { font-size: 14px; font-weight: 720; }
         .maintenance-state {
+          display: none;
+        }
+        .maintenance-progress {
+          display: none;
           overflow: hidden;
-          color: var(--secondary-text-color);
+          position: relative;
+          height: 30px;
+          margin-bottom: 10px;
+          border: 1px solid color-mix(in srgb, var(--progress-color, var(--vs-blue)) 24%, transparent);
+          border-radius: 11px;
+          background: color-mix(in srgb, var(--progress-color, var(--vs-blue)) 8%, transparent);
+          color: var(--primary-text-color);
+        }
+        .maintenance-progress.visible { display: block; }
+        .maintenance-progress-fill {
+          width: var(--progress, 0%);
+          height: 100%;
+          border-radius: inherit;
+          background: linear-gradient(90deg, color-mix(in srgb, var(--progress-color) 84%, transparent), color-mix(in srgb, var(--progress-color) 36%, transparent));
+          transition: width .45s cubic-bezier(.22, 1, .36, 1), background .3s ease;
+        }
+        .maintenance-progress.sending .maintenance-progress-fill,
+        .maintenance-progress.running .maintenance-progress-fill {
+          width: 38%;
+          animation: vs-maintenance-progress 1.25s ease-in-out infinite;
+        }
+        @keyframes vs-maintenance-progress {
+          0% { transform: translateX(-120%); }
+          100% { transform: translateX(290%); }
+        }
+        .maintenance-progress-label {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          padding: 0 11px;
+          overflow: hidden;
           font-size: 11px;
+          font-weight: 700;
           text-overflow: ellipsis;
           white-space: nowrap;
         }
@@ -380,7 +432,7 @@ class VpsSentinelAppleCard extends HTMLElement {
           font-size: 12px;
           font-weight: 680;
           cursor: pointer;
-          transition: background .2s ease, opacity .2s ease;
+          transition: background .2s ease, opacity .2s ease, color .2s ease;
         }
         .action + .action {
           border-left: 1px solid color-mix(in srgb, var(--primary-text-color) 10%, transparent);
@@ -391,7 +443,14 @@ class VpsSentinelAppleCard extends HTMLElement {
         .action:active {
           background: color-mix(in srgb, var(--accent) 19%, transparent);
         }
+        .action:focus-visible,
+        .resource:focus-visible,
+        .insight:focus-visible {
+          outline: 2px solid var(--accent, var(--vs-blue));
+          outline-offset: -2px;
+        }
         .action:disabled { cursor: wait; opacity: .45; }
+        .maintenance.busy .actions { opacity: .7; }
         dialog {
           width: min(330px, calc(100% - 32px));
           padding: 0;
@@ -448,6 +507,8 @@ class VpsSentinelAppleCard extends HTMLElement {
           .value { font-size: clamp(22px, 8vw, 30px); }
           .track { height: 6px; }
           .insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .maintenance { margin-top: 16px; padding: 14px; }
+          .action { padding-inline: 4px; font-size: 11px; }
         }
         @media (max-width: 340px) {
           .header-status { flex-basis: auto; width: auto; }
@@ -530,6 +591,20 @@ class VpsSentinelAppleCard extends HTMLElement {
       resources: {},
       insights: {},
     };
+    const maintenanceProgress = document.createElement("div");
+    maintenanceProgress.className = "maintenance-progress";
+    maintenanceProgress.setAttribute("role", "status");
+    maintenanceProgress.setAttribute("aria-live", "polite");
+    maintenanceProgress.innerHTML =
+      '<div class="maintenance-progress-fill"></div><div class="maintenance-progress-label"></div>';
+    this._nodes.maintenance.insertBefore(
+      maintenanceProgress,
+      this._nodes.maintenance.querySelector(".actions"),
+    );
+    this._nodes.maintenanceProgress = maintenanceProgress;
+    this._nodes.maintenanceProgressLabel = maintenanceProgress.querySelector(
+      ".maintenance-progress-label",
+    );
     for (const button of this.shadowRoot.querySelectorAll(".action")) {
       button.addEventListener("click", () => this._confirmAction(button.dataset.action));
     }
@@ -655,14 +730,62 @@ class VpsSentinelAppleCard extends HTMLElement {
     );
     maintenance.classList.toggle("visible", maintenanceVisible);
     if (maintenanceVisible) {
-      const busy = maintenanceEntity.state === "running";
+      const backendState = maintenanceEntity.state;
       const message = maintenanceEntity.attributes?.message;
-      this._nodes.maintenanceState.textContent =
-        message || this._maintenanceLabel(maintenanceEntity.state);
+      if (backendState !== "idle") this._localMaintenanceState = null;
+      if (
+        this._localMaintenanceState
+        && Date.now() - this._localMaintenanceState.at > 15000
+      ) this._localMaintenanceState = null;
+      const localState = this._localMaintenanceState;
+      const state = backendState === "idle" && localState
+        ? localState.state
+        : backendState;
+      const progressMessage = backendState === "idle" && localState
+        ? localState.message
+        : message;
+      const busy = state === "running" || state === "sending";
+      this._setMaintenanceProgress(state, progressMessage);
       for (const button of maintenance.querySelectorAll(".action")) {
         button.disabled = busy;
       }
+      maintenance.classList.toggle("busy", busy);
     }
+  }
+
+  _setMaintenanceProgress(state, message) {
+    const progress = this._nodes.maintenanceProgress;
+    const labels = {
+      sending: "正在送出操作…",
+      running: "正在處理，請稍候…",
+      success: "操作完成",
+      scheduled: "已安排重新啟動",
+      failed: "操作未完成",
+      rejected: "操作已拒絕",
+      cooldown: "請稍候再試",
+      busy: "已有操作正在進行",
+      disabled: "遠端維護尚未啟用",
+    };
+    const colors = {
+      sending: "var(--vs-blue)",
+      running: "var(--vs-blue)",
+      success: "var(--vs-green)",
+      scheduled: "var(--vs-purple)",
+      failed: "var(--vs-red)",
+      rejected: "var(--vs-red)",
+      cooldown: "var(--vs-orange)",
+      busy: "var(--vs-orange)",
+      disabled: "var(--vs-orange)",
+    };
+    const visible = state && state !== "idle";
+    progress.className = `maintenance-progress ${visible ? "visible" : ""} ${state || ""}`.trim();
+    progress.style.setProperty("--progress-color", colors[state] || "var(--vs-blue)");
+    progress.style.setProperty(
+      "--progress",
+      state === "sending" || state === "running" ? "38%" : "100%",
+    );
+    this._nodes.maintenanceProgressLabel.textContent =
+      message || labels[state] || "";
   }
 
   _maintenanceLabel(state) {
@@ -707,6 +830,12 @@ class VpsSentinelAppleCard extends HTMLElement {
     const requestId = globalThis.crypto?.randomUUID?.()
       || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     try {
+      this._localMaintenanceState = {
+        state: "sending",
+        message: "正在送出操作…",
+        at: Date.now(),
+      };
+      this._update();
       await this._hass.callService("mqtt", "publish", {
         topic: this._config.commandTopic,
         payload: JSON.stringify({
@@ -717,9 +846,19 @@ class VpsSentinelAppleCard extends HTMLElement {
         qos: 1,
         retain: false,
       });
-      this._nodes.maintenanceState.textContent = "命令已送出";
+      this._localMaintenanceState = {
+        state: "sending",
+        message: "命令已送出，等待主機回覆…",
+        at: Date.now(),
+      };
+      this._update();
     } catch (_error) {
-      this._nodes.maintenanceState.textContent = "無法送出，請檢查 MQTT 權限";
+      this._localMaintenanceState = {
+        state: "failed",
+        message: "無法送出，請檢查 MQTT 權限",
+        at: Date.now(),
+      };
+      this._update();
     } finally {
       this._pendingAction = null;
     }
