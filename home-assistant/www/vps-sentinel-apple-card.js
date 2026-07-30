@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.9.4";
+const CARD_VERSION = "0.9.5";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -163,7 +163,7 @@ class VpsSentinelAppleCard extends HTMLElement {
             );
           cursor: pointer;
           box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
-          transition: transform .22s ease, background .22s ease, border-color .22s ease, box-shadow .22s ease;
+          transition: transform .2s cubic-bezier(.22, 1, .36, 1), border-color .34s ease, box-shadow .42s ease;
           will-change: transform;
           -webkit-tap-highlight-color: transparent;
           touch-action: manipulation;
@@ -171,12 +171,10 @@ class VpsSentinelAppleCard extends HTMLElement {
         .resource:active,
         .resource.pressing,
         .insight:active,
-        .insight.pressing { transform: scale(.975); }
-        .resource:hover,
-        .insight:hover {
-          background: color-mix(in srgb, var(--card-background-color) 94%, transparent);
-          border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-          box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 12%, transparent), inset 0 1px 0 rgba(255,255,255,.045);
+        .insight.pressing {
+          transform: scale(.975);
+          border-color: color-mix(in srgb, var(--accent) 56%, transparent);
+          box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent), 0 0 24px color-mix(in srgb, var(--accent) 28%, transparent), inset 0 1px 0 rgba(255,255,255,.045);
         }
         .resource-top {
           display: flex;
@@ -260,7 +258,7 @@ class VpsSentinelAppleCard extends HTMLElement {
             );
           cursor: pointer;
           box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
-          transition: transform .22s ease, background .22s ease, border-color .22s ease, box-shadow .22s ease;
+          transition: transform .2s cubic-bezier(.22, 1, .36, 1), border-color .34s ease, box-shadow .42s ease;
           will-change: transform;
           -webkit-tap-highlight-color: transparent;
           touch-action: manipulation;
@@ -1036,7 +1034,7 @@ class VpsSentinelAppleCard extends HTMLElement {
     let releaseTimer;
     const release = () => {
       clearTimeout(releaseTimer);
-      releaseTimer = setTimeout(() => node.classList.remove("pressing"), 120);
+      releaseTimer = setTimeout(() => node.classList.remove("pressing"), 180);
     };
     node.addEventListener("pointerdown", () => {
       clearTimeout(releaseTimer);
