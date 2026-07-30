@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.9.1";
+const CARD_VERSION = "0.9.2";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -165,8 +165,11 @@ class VpsSentinelAppleCard extends HTMLElement {
           box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
           transition: transform .22s ease, background .22s ease, border-color .22s ease, box-shadow .22s ease;
           will-change: transform;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
         }
         .resource:active { transform: scale(.975); }
+        .resource.pressing { transform: scale(.975); }
         .resource:hover {
           background: color-mix(in srgb, var(--card-background-color) 94%, transparent);
           border-color: color-mix(in srgb, var(--accent) 34%, transparent);
@@ -254,12 +257,20 @@ class VpsSentinelAppleCard extends HTMLElement {
             );
           cursor: pointer;
           transition: transform .2s ease, border-color .2s ease, background .2s ease;
+          will-change: transform;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
         }
         .insight:hover {
           transform: translateY(-1px);
           border-color: color-mix(in srgb, var(--accent) 34%, transparent);
         }
-        .insight:active { transform: scale(.985); }
+        .insight:active,
+        .insight.pressing {
+          transform: scale(.965);
+          border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+          background: color-mix(in srgb, var(--accent) 20%, transparent);
+        }
         }
         .insight-label {
           margin-bottom: 5px;
@@ -623,7 +634,7 @@ class VpsSentinelAppleCard extends HTMLElement {
         <div class="value"><span class="number">—</span><span class="unit">%</span></div>
         <div class="track"><div class="fill"></div></div>`;
       node.querySelector(".label").textContent = label;
-      node.addEventListener("click", () => this._moreInfo(this._config[key]));
+      this._bindMoreInfo(node, this._config[key]);
       container.appendChild(node);
       this._nodes.resources[key] = node;
     }
@@ -641,7 +652,7 @@ class VpsSentinelAppleCard extends HTMLElement {
       node.innerHTML =
         '<div class="insight-label"></div><div class="insight-value">—</div>';
       node.querySelector(".insight-label").textContent = label;
-      node.addEventListener("click", () => this._moreInfo(this._config[key]));
+      this._bindMoreInfo(node, this._config[key]);
       insightContainer.appendChild(node);
       this._nodes.insights[key] = node;
     }
@@ -732,10 +743,11 @@ class VpsSentinelAppleCard extends HTMLElement {
     if (maintenanceVisible) {
       const backendState = maintenanceEntity.state;
       const message = maintenanceEntity.attributes?.message;
+      const action = maintenanceEntity.attributes?.action;
       if (backendState !== "idle") this._localMaintenanceState = null;
       if (
         this._localMaintenanceState
-        && Date.now() - this._localMaintenanceState.at > 15000
+        && Date.now() > this._localMaintenanceState.expiresAt
       ) this._localMaintenanceState = null;
       const localState = this._localMaintenanceState;
       const state = backendState === "idle" && localState
@@ -744,13 +756,66 @@ class VpsSentinelAppleCard extends HTMLElement {
       const progressMessage = backendState === "idle" && localState
         ? localState.message
         : message;
-      const busy = state === "running" || state === "sending";
-      this._setMaintenanceProgress(state, progressMessage);
+      const progressAction = backendState === "idle" && localState
+        ? localState.action
+        : action;
+      const displayState = this._maintenanceDisplayState(
+        state,
+        progressAction,
+        maintenanceEntity.attributes?.updated_at,
+      );
+      const busy = displayState === "running" || displayState === "sending";
+      this._setMaintenanceProgress(
+        displayState,
+        this._maintenanceMessage(displayState, progressAction, progressMessage),
+      );
       for (const button of maintenance.querySelectorAll(".action")) {
         button.disabled = busy;
       }
       maintenance.classList.toggle("busy", busy);
     }
+  }
+
+  _maintenanceDisplayState(state, action, updatedAt) {
+    const temporary = new Set([
+      "success", "scheduled", "failed", "rejected", "cooldown", "busy",
+    ]);
+    if (!temporary.has(state)) return state;
+    const key = `${state}:${action || "none"}:${updatedAt || "local"}`;
+    if (this._dismissedMaintenanceEvent === key) return "idle";
+    if (this._maintenanceDismissTimerKey !== key) {
+      clearTimeout(this._maintenanceDismissTimer);
+      this._maintenanceDismissTimerKey = key;
+      this._maintenanceDismissTimer = setTimeout(() => {
+        this._dismissedMaintenanceEvent = key;
+        this._maintenanceDismissTimerKey = null;
+        this._update();
+      }, 5000);
+    }
+    return state;
+  }
+
+  _maintenanceMessage(state, action, message) {
+    const name = {
+      refresh: "檢查更新",
+      security_update: "安全更新",
+      reboot: "重新啟動",
+    }[action] || "主機維護";
+    if (state === "sending") return `正在送出「${name}」…`;
+    if (state === "running") return `正在${name}，請稍候…`;
+    if (state === "success") return `完成：${message || name}`;
+    if (state === "scheduled") return message || "已安排重新啟動";
+    if (state === "failed") return `${name}未完成：${message || "請稍後再試"}`;
+    if (state === "cooldown") {
+      const seconds = String(message || "").match(/(\d+)\s*秒/)?.[1];
+      return seconds
+        ? `「${name}」可在 ${seconds} 秒後再次執行`
+        : `「${name}」正在冷卻，請稍後再試`;
+    }
+    if (state === "rejected") return `「${name}」已拒絕：${message || "請重新操作"}`;
+    if (state === "busy") return message || "已有另一個維護操作正在進行";
+    if (state === "disabled") return "遠端維護尚未啟用";
+    return message || "";
   }
 
   _setMaintenanceProgress(state, message) {
@@ -834,6 +899,8 @@ class VpsSentinelAppleCard extends HTMLElement {
         state: "sending",
         message: "正在送出操作…",
         at: Date.now(),
+        action,
+        expiresAt: Date.now() + 15000,
       };
       this._update();
       await this._hass.callService("mqtt", "publish", {
@@ -850,6 +917,8 @@ class VpsSentinelAppleCard extends HTMLElement {
         state: "sending",
         message: "命令已送出，等待主機回覆…",
         at: Date.now(),
+        action,
+        expiresAt: Date.now() + 15000,
       };
       this._update();
     } catch (_error) {
@@ -857,6 +926,8 @@ class VpsSentinelAppleCard extends HTMLElement {
         state: "failed",
         message: "無法送出，請檢查 MQTT 權限",
         at: Date.now(),
+        action,
+        expiresAt: Date.now() + 5000,
       };
       this._update();
     } finally {
@@ -904,6 +975,29 @@ class VpsSentinelAppleCard extends HTMLElement {
     node.textContent = label;
     node.addEventListener("click", () => this._moreInfo(entityId));
     container.appendChild(node);
+  }
+
+  _bindMoreInfo(node, entityId) {
+    node.setAttribute("role", "button");
+    node.tabIndex = 0;
+    let releaseTimer;
+    const release = () => {
+      clearTimeout(releaseTimer);
+      releaseTimer = setTimeout(() => node.classList.remove("pressing"), 120);
+    };
+    node.addEventListener("pointerdown", () => {
+      clearTimeout(releaseTimer);
+      node.classList.add("pressing");
+    });
+    node.addEventListener("pointerup", release);
+    node.addEventListener("pointercancel", release);
+    node.addEventListener("pointerleave", release);
+    node.addEventListener("click", () => this._moreInfo(entityId));
+    node.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      this._moreInfo(entityId);
+    });
   }
 
   _moreInfo(entityId) {

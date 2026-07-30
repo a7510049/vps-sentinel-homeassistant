@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import math
 import os
 import platform
 import re
@@ -273,7 +274,17 @@ class MaintenanceController:
                 self.publish("busy", action, "已有維護操作正在執行")
                 return False
             if now - self.last_started.get(action, float("-inf")) < self.cooldown:
-                self.publish("cooldown", action, "操作冷卻中，請稍後再試")
+                remaining = max(
+                    1,
+                    math.ceil(
+                        self.cooldown - (now - self.last_started[action])
+                    ),
+                )
+                self.publish(
+                    "cooldown",
+                    action,
+                    f"{action} 操作冷卻中，約 {remaining} 秒後可再次執行",
+                )
                 return False
             self.busy = True
             self.last_started[action] = now
