@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.9.3";
+const CARD_VERSION = "0.9.4";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -168,9 +168,12 @@ class VpsSentinelAppleCard extends HTMLElement {
           -webkit-tap-highlight-color: transparent;
           touch-action: manipulation;
         }
-        .resource:active { transform: scale(.975); }
-        .resource.pressing { transform: scale(.975); }
-        .resource:hover {
+        .resource:active,
+        .resource.pressing,
+        .insight:active,
+        .insight.pressing { transform: scale(.975); }
+        .resource:hover,
+        .insight:hover {
           background: color-mix(in srgb, var(--card-background-color) 94%, transparent);
           border-color: color-mix(in srgb, var(--accent) 34%, transparent);
           box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 12%, transparent), inset 0 1px 0 rgba(255,255,255,.045);
@@ -256,18 +259,11 @@ class VpsSentinelAppleCard extends HTMLElement {
               color-mix(in srgb, var(--card-background-color) 86%, transparent)
             );
           cursor: pointer;
-          transition: transform .2s ease, border-color .2s ease, background .2s ease;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+          transition: transform .22s ease, background .22s ease, border-color .22s ease, box-shadow .22s ease;
           will-change: transform;
           -webkit-tap-highlight-color: transparent;
           touch-action: manipulation;
-        }
-        .insight:hover {
-          transform: translateY(-1px);
-          border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-        }
-        .insight:active,
-        .insight.pressing {
-          transform: scale(.975);
         }
         }
         .insight-label {
