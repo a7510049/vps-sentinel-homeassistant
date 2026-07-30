@@ -573,6 +573,11 @@ def main():
     maintenance = MaintenanceController(client)
 
     def on_command(_client, _userdata, message):
+        # Clearing a retained MQTT command uses an empty payload. Depending on
+        # broker timing, the client may receive its own cleanup message after
+        # subscribing; it is housekeeping, not an invalid user command.
+        if not message.payload:
+            return
         if message.retain:
             maintenance.publish("rejected", message="已拒絕保留的舊命令")
             return

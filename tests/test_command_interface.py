@@ -63,6 +63,10 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn('ALLOW_REMOTE_ACTIONS="false"', SETUP)
         self.assertIn("toggle_remote_actions", MANAGE)
         self.assertIn("固定安全操作", MANAGE)
+        monitor = (
+            ROOT / "vps-monitor" / "vps_monitor.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("if not message.payload:", monitor)
 
     def test_apple_assets_follow_install_upgrade_and_removal_lifecycle(self):
         for script in (SETUP, SENTINEL_UPGRADE):
