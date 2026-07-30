@@ -72,7 +72,7 @@ show_status() {
     if systemctl is-active --quiet "${service}" 2>/dev/null; then
       green "${service}：正常"
     else
-      yellow "${service}：未運行或未安裝"
+      yellow "${service}：未運作或未安裝"
     fi
   done
   if command -v docker >/dev/null 2>&1 &&
@@ -80,7 +80,7 @@ show_status() {
        grep -qx homeassistant; then
     green "homeassistant：正常"
   else
-    yellow "homeassistant：未運行或未安裝"
+    yellow "homeassistant：未運作或未安裝"
   fi
   if command -v tailscale >/dev/null 2>&1; then
     state="$(tailscale status --json 2>/dev/null |
@@ -145,7 +145,7 @@ show_settings() {
     return
   fi
   echo "VPS 名稱：$(read_env VPS_NAME 未設定)"
-  echo "回報間隔：$(read_env PUBLISH_INTERVAL 30) 秒"
+  echo "資源更新：$(read_env PUBLISH_INTERVAL 15) 秒"
   echo "服務檢查：$(read_env HEALTH_CHECK_INTERVAL 300) 秒"
   echo "CPU 告警：$(read_env CPU_WARN_PERCENT 90)%"
   echo "記憶體告警：$(read_env MEMORY_WARN_PERCENT 90)%"
@@ -178,34 +178,34 @@ change_profile() {
     red "找不到監控設定，請先完成安裝。"
     return
   fi
-  echo "  1) 極省資源：5 分鐘回報"
-  echo "  2) 平衡模式：2 分鐘回報（推薦）"
-  echo "  3) 即時監控：30 秒回報"
+  echo "  1) 極省資源：每 60 秒更新資源"
+  echo "  2) 平衡模式：每 15 秒更新資源（推薦）"
+  echo "  3) 即時監控：每 10 秒更新資源"
   read -r -p "請選擇 [2]：" choice
   choice="${choice:-2}"
   backup="${ENV_FILE}.backup.$(date +%Y%m%d-%H%M%S)"
   cp -a "${ENV_FILE}" "${backup}"
   case "${choice}" in
     1)
-      set_env PUBLISH_INTERVAL 300
+      set_env PUBLISH_INTERVAL 60
       set_env HEALTH_CHECK_INTERVAL 900
       set_env UPDATE_CHECK_INTERVAL 86400
       set_env MONITOR_NETWORK false
-      set_env OVERLOAD_SAMPLES 2
+      set_env OVERLOAD_SAMPLES 5
       ;;
     2)
-      set_env PUBLISH_INTERVAL 120
+      set_env PUBLISH_INTERVAL 15
       set_env HEALTH_CHECK_INTERVAL 300
       set_env UPDATE_CHECK_INTERVAL 86400
       set_env MONITOR_NETWORK false
-      set_env OVERLOAD_SAMPLES 3
+      set_env OVERLOAD_SAMPLES 20
       ;;
     3)
-      set_env PUBLISH_INTERVAL 30
+      set_env PUBLISH_INTERVAL 10
       set_env HEALTH_CHECK_INTERVAL 60
       set_env UPDATE_CHECK_INTERVAL 21600
       set_env MONITOR_NETWORK true
-      set_env OVERLOAD_SAMPLES 10
+      set_env OVERLOAD_SAMPLES 30
       ;;
     *)
       yellow "請選擇 1、2 或 3。"
@@ -272,47 +272,87 @@ install_dashboard() {
   cat > "${DASHBOARD_FILE}" <<YAML
 title: VPS Sentinel
 views:
-  - title: 系統資訊
+  - title: 主機狀態
     path: overview
     icon: mdi:server
     cards:
-      - type: gauge
-        entity: sensor.${vps_id}_cpu_percent
-        name: CPU 使用率
-        min: 0
-        max: 100
-        severity:
-          green: 0
-          yellow: 70
-          red: 90
-      - type: entities
-        title: 🖥️ 主機資源
-        show_header_toggle: false
-        entities:
-          - entity: sensor.${vps_id}_memory_percent
-            name: 記憶體使用率
-          - entity: sensor.${vps_id}_disk_percent
-            name: 根目錄磁碟
-          - entity: sensor.${vps_id}_uptime_hours
-            name: 已運行時間
-          - entity: sensor.${vps_id}_last_report
-            name: 最近回報時間
-          - entity: sensor.${vps_id}_security_updates
-            name: 待安裝安全更新
-          - entity: sensor.${vps_id}_docker_running
-            name: 執行中的 Container
-      - type: entities
-        title: 🛡️ 健康狀態
-        show_header_toggle: false
-        entities:
-          - entity: binary_sensor.${vps_id}_offline
-            name: 連線狀態
-          - entity: binary_sensor.${vps_id}_resource_overload
-            name: 系統負載
-          - entity: binary_sensor.${vps_id}_service_problem
-            name: 服務運作
-          - entity: binary_sensor.${vps_id}_reboot_required
-            name: 重新啟動提醒
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.${vps_id}_health_status
+            state_not: 運作正常
+        card:
+          type: tile
+          entity: sensor.${vps_id}_health_status
+          name: 主機需要留意
+          color: orange
+      - type: markdown
+        content: |
+          ## 🖥️ 主機資源
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.${vps_id}_memory_percent
+            name: 記憶體
+            min: 0
+            max: 100
+            severity:
+              green: 0
+              yellow: 75
+              red: 90
+          - type: gauge
+            entity: sensor.${vps_id}_disk_percent
+            name: 磁碟
+            min: 0
+            max: 100
+            severity:
+              green: 0
+              yellow: 70
+              red: 85
+      - type: markdown
+        content: >-
+          記憶體已使用
+          **{{ state_attr('sensor.${vps_id}_memory_percent', 'used_gb') }} GB**
+          ／ {{ state_attr('sensor.${vps_id}_memory_percent', 'total_gb') }} GB
+          · 磁碟剩餘
+          **{{ state_attr('sensor.${vps_id}_disk_percent', 'free_gb') }} GB**
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: tile
+            entity: sensor.${vps_id}_cpu_percent
+            name: CPU
+            color: blue
+          - type: tile
+            entity: sensor.${vps_id}_uptime_hours
+            name: 已運作
+            color: blue
+      - type: markdown
+        content: |
+          ## 🛡️ 運作狀態
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: tile
+            entity: sensor.${vps_id}_health_status
+            name: 整體狀態
+          - type: tile
+            entity: binary_sensor.${vps_id}_reporting
+            name: 資料更新
+          - type: tile
+            entity: sensor.${vps_id}_security_updates
+            name: 安全更新
+          - type: tile
+            entity: sensor.${vps_id}_docker_running
+            name: 運作中容器
+          - type: tile
+            entity: binary_sensor.${vps_id}_service_problem
+            name: 服務狀態
+          - type: tile
+            entity: binary_sensor.${vps_id}_reboot_required
+            name: 重新啟動
 YAML
 
   if ! grep -q '^[[:space:]]*lovelace:' "${HA_CONFIG}"; then

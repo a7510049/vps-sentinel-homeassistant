@@ -274,7 +274,7 @@ if ! systemctl restart mosquitto; then
   exit 1
 fi
 if ! systemctl is-active --quiet mosquitto; then
-  red "Mosquitto 重啟後未保持運行，最近的日誌如下："
+  red "Mosquitto 重啟後未保持運作，最近的日誌如下："
   journalctl -u mosquitto -n 50 --no-pager || true
   exit 1
 fi
@@ -439,15 +439,15 @@ else
   fi
 
   echo "資源模式："
-  echo "  1) 極省資源：5 分鐘回報"
-  echo "  2) 平衡模式：2 分鐘回報（推薦）"
-  echo "  3) 即時監控：30 秒回報"
+  echo "  1) 極省資源：每 60 秒更新資源"
+  echo "  2) 平衡模式：每 15 秒更新資源（推薦）"
+  echo "  3) 即時監控：每 10 秒更新資源"
   profile=""
   ask profile "請選擇" "2"
   case "${profile}" in
-    1) interval=300; health=900; updates=86400; samples=2 ;;
-    2) interval=120; health=300; updates=86400; samples=3 ;;
-    3) interval=30;  health=60;  updates=21600; samples=10 ;;
+    1) interval=60; health=900; updates=86400; samples=5 ;;
+    2) interval=15; health=300; updates=86400; samples=20 ;;
+    3) interval=10; health=60; updates=21600; samples=30 ;;
     *) red "請選擇 1、2 或 3。"; exit 1 ;;
   esac
 
@@ -528,14 +528,14 @@ for service in docker mosquitto vps-monitor; do
   if systemctl is-active --quiet "${service}"; then
     green "${service}：正常"
   else
-    red "${service}：未運行"
+    red "${service}：未運作"
     checks_failed=true
   fi
 done
 if docker ps --format '{{.Names}}' | grep -qx homeassistant; then
   green "homeassistant：正常"
 else
-  red "homeassistant：未運行"
+  red "homeassistant：未運作"
   checks_failed=true
 fi
 

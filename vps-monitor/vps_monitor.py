@@ -28,13 +28,15 @@ HOST = env("MQTT_HOST")
 PORT = int(env("MQTT_PORT", "1883"))
 USER = env("MQTT_USERNAME")
 PASSWORD = env("MQTT_PASSWORD")
-INTERVAL = max(10, int(env("PUBLISH_INTERVAL", "30")))
+INTERVAL = max(10, int(env("PUBLISH_INTERVAL", "15")))
 HEALTH_INTERVAL = max(INTERVAL, int(env("HEALTH_CHECK_INTERVAL", "300")))
 UPDATE_INTERVAL = max(3600, int(env("UPDATE_CHECK_INTERVAL", "86400")))
 MONITOR_NETWORK = env("MONITOR_NETWORK", "false").lower() in ("1", "true", "yes")
 PREFIX = env("DISCOVERY_PREFIX", "homeassistant").strip("/")
 BASE = f"vps/{VPS_ID}"
 STATE = f"{BASE}/state"
+RESOURCE_STATE = f"{BASE}/resources"
+STATUS_STATE = f"{BASE}/status"
 ONLINE = f"{BASE}/online"
 CPU_WARN = float(env("CPU_WARN_PERCENT", "90"))
 MEM_WARN = float(env("MEMORY_WARN_PERCENT", "90"))
@@ -136,17 +138,29 @@ def docker_health():
     return parse_docker_health(result.stdout)
 
 
+def health_status(resource_overload, disk_low, service_problem,
+                  reboot_required, security_update_count):
+    if service_problem or disk_low:
+        return "critical"
+    if resource_overload or reboot_required:
+        return "warning"
+    if isinstance(security_update_count, int) and security_update_count > 0:
+        return "warning"
+    return "normal"
+
+
 def config_sensor(key, name, unit=None, device_class=None, state_class=None,
-                  icon=None, entity_category="diagnostic"):
+                  icon=None, entity_category="diagnostic", topic=STATUS_STATE,
+                  expire_after=None, attributes=None, value_template=None):
     cfg = {
         "name": name,
         "unique_id": f"{VPS_ID}_{key}",
         "default_entity_id": f"sensor.{VPS_ID}_{key}",
-        "state_topic": STATE,
+        "state_topic": topic,
         # MQTT may still retain a payload from an older version that does not
         # contain a newly added field. Return unknown until the next report
         # instead of making the Home Assistant template fail.
-        "value_template": (
+        "value_template": value_template or (
             f"{{{{ value_json.get('{key}', 'unknown') }}}}"
         ),
         "availability_topic": ONLINE,
@@ -163,15 +177,21 @@ def config_sensor(key, name, unit=None, device_class=None, state_class=None,
         cfg["state_class"] = state_class
     if icon:
         cfg["icon"] = icon
+    if expire_after:
+        cfg["expire_after"] = expire_after
+    if attributes:
+        cfg["json_attributes_topic"] = topic
+        cfg["json_attributes_template"] = attributes
     return cfg
 
 
-def config_binary(key, name, device_class="occupancy", available=True):
+def config_binary(key, name, device_class="occupancy", available=True,
+                  topic=STATUS_STATE, expire_after=None):
     cfg = {
         "name": name,
         "unique_id": f"{VPS_ID}_{key}",
         "default_entity_id": f"binary_sensor.{VPS_ID}_{key}",
-        "state_topic": ONLINE if key == "offline" else STATE,
+        "state_topic": ONLINE if key == "offline" else topic,
         "value_template": (
             "{{ 'OFF' if value == 'ON' else 'ON' }}"
             if key == "offline"
@@ -190,31 +210,53 @@ def config_binary(key, name, device_class="occupancy", available=True):
             "payload_available": "ON",
             "payload_not_available": "OFF",
         })
+    if expire_after:
+        cfg["expire_after"] = expire_after
     return cfg
 
 
 def publish_discovery(client):
     sensors = {
         "cpu_percent": config_sensor(
-            "cpu_percent", "CPU 使用率", "%", None, "measurement", "mdi:cpu-64-bit"
+            "cpu_percent", "CPU 使用率", "%", None, "measurement",
+            "mdi:cpu-64-bit", topic=RESOURCE_STATE,
+            expire_after=max(60, INTERVAL * 3),
         ),
         "memory_percent": config_sensor(
-            "memory_percent", "記憶體使用率", "%", None, "measurement", "mdi:memory"
+            "memory_percent", "記憶體使用率", "%", None, "measurement",
+            "mdi:memory", topic=RESOURCE_STATE,
+            expire_after=max(60, INTERVAL * 3),
+            attributes=(
+                "{{ {'used_gb': value_json.get('memory_used_gb'), "
+                "'available_gb': value_json.get('memory_available_gb'), "
+                "'total_gb': value_json.get('memory_total_gb')} | tojson }}"
+            ),
         ),
         "disk_percent": config_sensor(
-            "disk_percent", "磁碟使用率", "%", None, "measurement", "mdi:harddisk"
+            "disk_percent", "磁碟使用率", "%", None, "measurement",
+            "mdi:harddisk",
+            attributes=(
+                "{{ {'used_gb': value_json.get('disk_used_gb'), "
+                "'free_gb': value_json.get('disk_free_gb'), "
+                "'total_gb': value_json.get('disk_total_gb')} | tojson }}"
+            ),
         ),
         "load_1": config_sensor("load_1", "負載 1 分鐘", icon="mdi:gauge"),
         "load_5": config_sensor("load_5", "負載 5 分鐘", icon="mdi:gauge"),
         "load_15": config_sensor("load_15", "負載 15 分鐘", icon="mdi:gauge"),
         "uptime_hours": config_sensor(
-            "uptime_hours", "已運行", "h", "duration", "measurement"
+            "uptime_hours", "已運作", "h", "duration", "measurement"
         ),
         "boot_time": config_sensor(
             "boot_time", "最近開機時間", device_class="timestamp"
         ),
-        "last_report": config_sensor(
-            "last_report", "最近回報時間", device_class="timestamp"
+        "health_status": config_sensor(
+            "health_status", "整體狀態", icon="mdi:heart-pulse",
+            value_template=(
+                "{% set status = value_json.get('health_status', 'unknown') %}"
+                "{{ {'normal':'運作正常', 'warning':'需要留意', "
+                "'critical':'需要處理'}.get(status, '資料不可用') }}"
+            ),
         ),
         "security_updates": config_sensor(
             "security_updates", "待安裝安全更新", icon="mdi:shield-alert"
@@ -241,10 +283,12 @@ def publish_discovery(client):
             )
     network_sensors = {
         "download_mbps": config_sensor(
-            "download_mbps", "下載速率", "Mbit/s", "data_rate", "measurement"
+            "download_mbps", "下載速率", "Mbit/s", "data_rate", "measurement",
+            topic=RESOURCE_STATE, expire_after=max(60, INTERVAL * 3),
         ),
         "upload_mbps": config_sensor(
-            "upload_mbps", "上傳速率", "Mbit/s", "data_rate", "measurement"
+            "upload_mbps", "上傳速率", "Mbit/s", "data_rate", "measurement",
+            topic=RESOURCE_STATE, expire_after=max(60, INTERVAL * 3),
         ),
     }
     if MONITOR_NETWORK:
@@ -257,6 +301,10 @@ def publish_discovery(client):
                 payload=None, qos=1, retain=True,
             )
     binaries = {
+        "reporting": config_binary(
+            "reporting", "資料持續更新", device_class="connectivity",
+            topic=RESOURCE_STATE, expire_after=max(60, INTERVAL * 3),
+        ),
         "offline": config_binary(
             "offline", "連線狀態", device_class="problem", available=False
         ),
@@ -273,6 +321,11 @@ def publish_discovery(client):
             "reboot_required", "重新啟動提醒", device_class="problem"
         ),
     }
+    # v0.6 replaces the timestamp entity with a clear live/stale indicator.
+    client.publish(
+        f"{PREFIX}/sensor/{VPS_ID}/last_report/config",
+        payload=None, qos=1, retain=True,
+    )
     for key, cfg in sensors.items():
         client.publish(
             f"{PREFIX}/sensor/{VPS_ID}/{key}/config",
@@ -322,14 +375,15 @@ def main():
     failed = []
     docker = {"available": False, "running": "unknown", "unhealthy": "unknown"}
     next_health_check = 0.0
+    disk = psutil.disk_usage("/")
+    load = os.getloadavg()
+    last_status_payload = None
 
     try:
         while True:
             loop_started = time.monotonic()
             cpu = psutil.cpu_percent(interval=None)
-            memory = psutil.virtual_memory().percent
-            disk = psutil.disk_usage("/").percent
-            load = os.getloadavg()
+            memory = psutil.virtual_memory()
             now = time.monotonic()
             download = upload = 0.0
             if MONITOR_NETWORK:
@@ -343,54 +397,107 @@ def main():
                 )
                 previous_net, previous_time = net, now
 
-            overloaded = cpu >= CPU_WARN or memory >= MEM_WARN
+            overloaded = cpu >= CPU_WARN or memory.percent >= MEM_WARN
             overload_count = overload_count + 1 if overloaded else 0
-            if now >= next_update_check:
-                updates = security_updates()
-                next_update_check = now + UPDATE_INTERVAL
-            if now >= next_health_check:
-                failed = service_health()
-                docker = docker_health()
-                next_health_check = now + HEALTH_INTERVAL
 
-            boot = datetime.fromtimestamp(
-                psutil.boot_time(), tz=timezone.utc
-            ).isoformat()
-            payload = {
+            resource_payload = {
                 "cpu_percent": round(cpu, 1),
-                "memory_percent": round(memory, 1),
-                "disk_percent": round(disk, 1),
-                "load_1": round(load[0], 2),
-                "load_5": round(load[1], 2),
-                "load_15": round(load[2], 2),
-                "uptime_hours": round((time.time() - psutil.boot_time()) / 3600, 1),
-                "boot_time": boot,
+                "memory_percent": round(memory.percent, 1),
+                "memory_used_gb": round(memory.used / 1e9, 2),
+                "memory_available_gb": round(memory.available / 1e9, 2),
+                "memory_total_gb": round(memory.total / 1e9, 2),
+                "reporting": True,
                 "last_report": datetime.now(timezone.utc).isoformat(),
-                "security_updates": updates,
-                "docker_running": docker["running"],
-                "docker_unhealthy": docker["unhealthy"],
-                "failed_services": ", ".join(failed) if failed else "無",
-                "resource_overload": overload_count >= OVERLOAD_SAMPLES,
-                "disk_low": disk >= DISK_WARN,
-                "service_problem": bool(
-                    failed
-                    or (DOCKER_PRESENT and not docker["available"])
-                    or (
-                        docker["available"]
-                        and isinstance(docker["unhealthy"], int)
-                        and docker["unhealthy"] > 0
-                    )
-                ),
-                "reboot_required": os.path.exists("/var/run/reboot-required"),
             }
             if MONITOR_NETWORK:
-                payload.update({
+                resource_payload.update({
                     "download_mbps": round(max(0, download), 3),
                     "upload_mbps": round(max(0, upload), 3),
                 })
             client.publish(
-                STATE, json.dumps(payload, ensure_ascii=False), qos=1, retain=True
+                RESOURCE_STATE,
+                json.dumps(resource_payload, ensure_ascii=False),
+                qos=0,
+                retain=True,
             )
+
+            if now >= next_update_check:
+                updates = security_updates()
+                next_update_check = now + UPDATE_INTERVAL
+            health_check_due = now >= next_health_check
+            if health_check_due:
+                failed = service_health()
+                docker = docker_health()
+                disk = psutil.disk_usage("/")
+                load = os.getloadavg()
+                next_health_check = now + HEALTH_INTERVAL
+
+            resource_overload = overload_count >= OVERLOAD_SAMPLES
+            disk_low = disk.percent >= DISK_WARN
+            service_problem = bool(
+                failed
+                or (DOCKER_PRESENT and not docker["available"])
+                or (
+                    docker["available"]
+                    and isinstance(docker["unhealthy"], int)
+                    and docker["unhealthy"] > 0
+                )
+            )
+            reboot_required = os.path.exists("/var/run/reboot-required")
+            status_payload = {
+                "disk_percent": round(disk.percent, 1),
+                "disk_used_gb": round(disk.used / 1e9, 2),
+                "disk_free_gb": round(disk.free / 1e9, 2),
+                "disk_total_gb": round(disk.total / 1e9, 2),
+                "load_1": round(load[0], 2),
+                "load_5": round(load[1], 2),
+                "load_15": round(load[2], 2),
+                "uptime_hours": round(
+                    (time.time() - psutil.boot_time()) / 3600, 1
+                ),
+                "boot_time": datetime.fromtimestamp(
+                    psutil.boot_time(), tz=timezone.utc
+                ).isoformat(),
+                "last_report": resource_payload["last_report"],
+                "security_updates": updates,
+                "docker_running": docker["running"],
+                "docker_unhealthy": docker["unhealthy"],
+                "failed_services": ", ".join(failed) if failed else "無",
+                "resource_overload": resource_overload,
+                "disk_low": disk_low,
+                "service_problem": service_problem,
+                "reboot_required": reboot_required,
+                "health_status": health_status(
+                    resource_overload,
+                    disk_low,
+                    service_problem,
+                    reboot_required,
+                    updates,
+                ),
+            }
+            comparable_status = {
+                key: value
+                for key, value in status_payload.items()
+                if key not in ("last_report", "uptime_hours")
+            }
+            if health_check_due or comparable_status != last_status_payload:
+                client.publish(
+                    STATUS_STATE,
+                    json.dumps(status_payload, ensure_ascii=False),
+                    qos=1,
+                    retain=True,
+                )
+                # Keep the v0.5 topic current during rolling upgrades.
+                client.publish(
+                    STATE,
+                    json.dumps(
+                        {**status_payload, **resource_payload},
+                        ensure_ascii=False,
+                    ),
+                    qos=1,
+                    retain=True,
+                )
+                last_status_payload = comparable_status
             wake_on_connect.wait(
                 timeout=max(1, INTERVAL - (time.monotonic() - loop_started))
             )

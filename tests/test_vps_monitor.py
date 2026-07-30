@@ -54,6 +54,30 @@ class MonitorParsingTests(unittest.TestCase):
             config["value_template"],
         )
 
+    def test_fast_resource_sensor_uses_expiring_resource_topic(self):
+        config = vps_monitor.config_sensor(
+            "cpu_percent",
+            "CPU 使用率",
+            topic=vps_monitor.RESOURCE_STATE,
+            expire_after=60,
+        )
+        self.assertEqual(config["state_topic"], vps_monitor.RESOURCE_STATE)
+        self.assertEqual(config["expire_after"], 60)
+
+    def test_health_status_prioritizes_critical_conditions(self):
+        self.assertEqual(
+            vps_monitor.health_status(False, True, False, False, 0),
+            "critical",
+        )
+        self.assertEqual(
+            vps_monitor.health_status(True, False, False, False, 0),
+            "warning",
+        )
+        self.assertEqual(
+            vps_monitor.health_status(False, False, False, False, 0),
+            "normal",
+        )
+
     @patch.object(vps_monitor, "run", return_value=None)
     def test_security_updates_returns_unknown_on_command_failure(self, _run):
         self.assertEqual(vps_monitor.security_updates(), "unknown")

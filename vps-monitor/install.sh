@@ -161,37 +161,37 @@ if [[ "${configure}" == "true" ]]; then
   prompt services "要監控的 systemd 服務，以空格分隔；不需要可留空" "ssh"
 
   info "步驟 2/4：資源模式與告警門檻"
-  echo "  1) 極省資源：每 5 分鐘回報，適合 512 MB 免費 VPS"
-  echo "  2) 平衡模式：每 2 分鐘回報（推薦）"
-  echo "  3) 即時監控：每 30 秒回報"
+  echo "  1) 極省資源：每 60 秒更新資源"
+  echo "  2) 平衡模式：每 15 秒更新資源（推薦）"
+  echo "  3) 即時監控：每 10 秒更新資源"
   while true; do
     read -r -p "請選擇模式 [2]：" resource_mode
     resource_mode="${resource_mode:-2}"
     case "${resource_mode}" in
       1)
-        interval="300"
+        interval="60"
         health_interval="900"
         update_interval="86400"
         network_default="no"
-        overload_default="2"
+        overload_default="5"
         mode_name="極省資源"
         break
         ;;
       2)
-        interval="120"
+        interval="15"
         health_interval="300"
         update_interval="86400"
         network_default="no"
-        overload_default="3"
+        overload_default="20"
         mode_name="平衡模式"
         break
         ;;
       3)
-        interval="30"
+        interval="10"
         health_interval="60"
         update_interval="21600"
         network_default="yes"
-        overload_default="10"
+        overload_default="30"
         mode_name="即時監控"
         break
         ;;
