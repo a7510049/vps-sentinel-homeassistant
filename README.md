@@ -91,7 +91,7 @@ sudo vps-sentinel-apple --apply
 若仍看到舊版卡片，請確認資源網址是：
 
 ```text
-/local/vps-sentinel-apple-card.js?v=0.9.1
+/local/vps-sentinel-apple-card.js?v=0.9.2
 ```
 
 ## 📱 手機如何使用
@@ -151,7 +151,7 @@ sudo vps-sentinel ha-update
 
 ## 🛡️ 主機維護按鈕
 
-0.9.1 起，儀表板可選擇顯示：
+0.9.2 起，儀表板可選擇顯示：
 
 - 檢查可用更新
 - 安裝 Ubuntu 安全更新
