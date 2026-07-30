@@ -104,8 +104,8 @@ for file in VERSION manage.sh update.sh uninstall.sh upgrade.sh doctor.sh \
     exit 1
   fi
 done
-if [[ "$(tr -d '[:space:]' < "${source_dir}/VERSION")" !=
-      "${latest_version}" ]]; then
+downloaded_version="$(tr -d '[:space:]' < "${source_dir}/VERSION")"
+if [[ "${downloaded_version}" != "${latest_version}" ]]; then
   red "版本檔與 Release 標籤不一致，已取消升級。"
   exit 1
 fi
