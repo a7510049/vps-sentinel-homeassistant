@@ -226,7 +226,8 @@ CPU、記憶體與磁碟使用同級動態長條，異常時才顯示醒目提�
 Home Assistant 的深色或淺色模式。安裝工具會透過官方
 儀表板資源頁載入元件；第一次需要手動註冊 JavaScript 模組，後續更新
 不必重複新增。註冊後執行 `sudo vps-sentinel-apple --apply` 即可套用。
-固定資源網址為 `/local/vps-sentinel-apple-card.js`。
+0.8 系列固定資源網址為 `/local/vps-sentinel-apple-card.js?v=0.8`；
+只有未來跨至 0.9 等新版前端時才需要更換一次。
 若要返回完全原生的穩定面板，執行 `sudo vps-sentinel dashboard` 即可。
 工具會先備份 `configuration.yaml`，產生獨立的
 `vps-sentinel-dashboard.yaml`，通過 Home Assistant 設定檢查後才重新
