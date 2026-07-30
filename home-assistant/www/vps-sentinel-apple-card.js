@@ -68,41 +68,49 @@ class VpsSentinelAppleCard extends HTMLElement {
         .header-status {
           display: flex;
           flex: 0 0 auto;
-          flex-direction: column;
-          gap: 7px;
           align-items: flex-end;
         }
         .health-card {
           --health-color: var(--vs-green);
           display: grid;
-          grid-template-columns: auto auto;
-          gap: 10px;
+          grid-template-columns: auto minmax(0, 1fr);
+          gap: 9px;
           align-items: center;
-          min-width: 112px;
-          padding: 10px 13px;
-          border: 1px solid color-mix(in srgb, var(--health-color) 24%, transparent);
-          border-radius: 20px;
+          min-width: 108px;
+          padding: 9px 12px;
+          border: 1px solid color-mix(in srgb, var(--primary-text-color) 11%, transparent);
+          border-radius: 17px;
           background:
             linear-gradient(
-              135deg,
-              color-mix(in srgb, var(--health-color) 22%, transparent),
-              color-mix(in srgb, var(--vs-blue) 8%, transparent)
+              145deg,
+              color-mix(in srgb, var(--primary-text-color) 7%, transparent),
+              color-mix(in srgb, var(--card-background-color) 84%, transparent)
             );
-          box-shadow:
-            inset 0 1px 0 rgba(255,255,255,.05),
-            0 10px 30px color-mix(in srgb, var(--health-color) 9%, transparent);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.045);
           transition: border-color .35s ease, background .35s ease;
         }
         .health-card.warning { --health-color: var(--vs-orange); }
         .health-card.critical,
         .health-card.offline,
         .health-card.stale { --health-color: var(--vs-red); }
+        .health-card.warning,
+        .health-card.critical,
+        .health-card.offline,
+        .health-card.stale {
+          border-color: color-mix(in srgb, var(--health-color) 28%, transparent);
+          background:
+            linear-gradient(
+              145deg,
+              color-mix(in srgb, var(--health-color) 15%, transparent),
+              color-mix(in srgb, var(--card-background-color) 86%, transparent)
+            );
+        }
         .health-orb {
-          width: 10px;
-          height: 10px;
+          width: 9px;
+          height: 9px;
           border-radius: 50%;
           background: var(--health-color);
-          box-shadow: 0 0 16px color-mix(in srgb, var(--health-color) 75%, transparent);
+          box-shadow: 0 0 12px color-mix(in srgb, var(--health-color) 62%, transparent);
         }
         .health-copy { min-width: 0; }
         .eyebrow {
@@ -121,12 +129,16 @@ class VpsSentinelAppleCard extends HTMLElement {
           line-height: 1.05;
         }
         .status {
-          color: var(--health-color);
-          font-size: 13px;
-          font-weight: 700;
+          color: var(--primary-text-color);
+          font-size: 12px;
+          font-weight: 720;
           line-height: 1.2;
           white-space: nowrap;
         }
+        .health-card.warning .status,
+        .health-card.critical .status,
+        .health-card.offline .status,
+        .health-card.stale .status { color: var(--health-color); }
         .resources {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
@@ -201,12 +213,12 @@ class VpsSentinelAppleCard extends HTMLElement {
         .reporting {
           margin-top: 3px;
           color: var(--secondary-text-color);
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 620;
           line-height: 1.2;
           white-space: nowrap;
         }
-        .reporting.live { color: color-mix(in srgb, var(--vs-green) 82%, white); }
+        .reporting.live { color: var(--secondary-text-color); }
         .reporting.stale { color: var(--vs-red); }
         .section-title {
           margin: 22px 2px 10px;
@@ -346,19 +358,38 @@ class VpsSentinelAppleCard extends HTMLElement {
         .actions {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 8px;
+          overflow: hidden;
+          border: 1px solid color-mix(in srgb, var(--primary-text-color) 11%, transparent);
+          border-radius: 16px;
+          background: color-mix(in srgb, var(--card-background-color) 78%, transparent);
         }
         .action {
           min-width: 0;
-          padding: 11px 8px;
-          border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
-          border-radius: 15px;
-          background: color-mix(in srgb, var(--accent) 11%, transparent);
+          padding: 12px 7px 11px;
+          border: 0;
+          border-radius: 0;
+          background:
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, var(--accent) 10%, transparent),
+              transparent 70%
+            );
+          box-shadow: inset 0 2px 0 color-mix(in srgb, var(--accent) 72%, transparent);
           color: var(--primary-text-color);
           font: inherit;
           font-size: 12px;
           font-weight: 680;
           cursor: pointer;
+          transition: background .2s ease, opacity .2s ease;
+        }
+        .action + .action {
+          border-left: 1px solid color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+        }
+        .action:hover {
+          background: color-mix(in srgb, var(--accent) 13%, transparent);
+        }
+        .action:active {
+          background: color-mix(in srgb, var(--accent) 19%, transparent);
         }
         .action:disabled { cursor: wait; opacity: .45; }
         dialog {
