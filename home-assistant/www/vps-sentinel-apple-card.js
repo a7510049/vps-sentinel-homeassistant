@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.9.5";
+const CARD_VERSION = "0.9.6";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -1043,7 +1043,10 @@ class VpsSentinelAppleCard extends HTMLElement {
     node.addEventListener("pointerup", release);
     node.addEventListener("pointercancel", release);
     node.addEventListener("pointerleave", release);
-    node.addEventListener("click", () => this._moreInfo(entityId));
+    node.addEventListener("click", (event) => {
+      this._moreInfo(entityId);
+      if (event.detail > 0) node.blur();
+    });
     node.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
