@@ -2,7 +2,7 @@
 
 > 把遠方 VPS 的狀態，變成手機裡一眼就看得懂的 Home Assistant 儀表板。
 
-VPS 常常安靜地待在遙遠的機房裡，替我們跑網站、容器、自動化、代理與各種服務。
+VPS 常常安靜地待在遙遠的機房裡，替我們執行網站、容器、自動化、代理與各種服務。
 但當 CPU 爆滿、磁碟快用完、Docker 掉線，或系統需要重新啟動時，它通常不會主動告訴你。
 
 **VPS Sentinel** 透過 MQTT 將 Linux 主機狀態送進 Home Assistant，讓你不用一直登入 SSH，也能隨時查看 VPS 是否健康、服務是否正常，以及有沒有需要處理的事情。
@@ -61,7 +61,7 @@ sudo vps-sentinel
 
 重要操作不應該靠運氣。
 
-VPS Sentinel 在更新前會備份必要檔案，更新失敗時可自動回復原本版本，並保留最近一份可用備份，避免暫存檔越堆越多。
+VPS Sentinel 在更新前會檢查下載內容與設定、備份必要檔案，更新失敗時自動回復原本版本，並只保留最近一份可用備份，避免暫存檔越堆越多。
 
 ### 🔐 可選的遠端維護
 
@@ -128,7 +128,7 @@ sudo bash setup.sh
 安裝完成後，在 Home Assistant 加入 MQTT 整合，再套用 Apple 風格儀表板：
 
 ```bash
-sudo vps-sentinel-apple --apply
+sudo vps-sentinel apple
 ```
 
 完整安裝說明請參考：
@@ -139,17 +139,65 @@ sudo vps-sentinel-apple --apply
 
 ## 🧭 常用指令
 
-| 功能 | 指令 |
+安裝器會把維護工具安裝到系統指令路徑，因此日常使用不需要進入專案資料夾，也不需要直接執行 `scripts/` 裡的檔案。
+
+| 功能 | 建議指令 |
 | --- | --- |
 | 開啟維護中心 | `sudo vps-sentinel` |
 | 查看目前狀態 | `sudo vps-sentinel status` |
-| 修改監控設定 | `sudo vps-sentinel settings` |
+| 查看監控設定 | `sudo vps-sentinel settings` |
 | 重新建立儀表板 | `sudo vps-sentinel dashboard` |
+| 套用 Apple 風格面板 | `sudo vps-sentinel apple` |
 | 健康檢查與修復 | `sudo vps-sentinel doctor` |
-| 建立設定備份 | `sudo vps-sentinel backup` |
+| 建立或還原備份 | `sudo vps-sentinel backup` |
 | 更新 VPS Sentinel | `sudo vps-sentinel upgrade` |
 | 更新 Home Assistant | `sudo vps-sentinel ha-update` |
 | 查看所有指令 | `sudo vps-sentinel help` |
+
+### 🛠️ 原始腳本位置
+
+維護腳本已統一移至 `scripts/`。只有在開發、除錯，或系統指令尚未安裝時，才需要直接執行原始腳本：
+
+```bash
+sudo bash scripts/doctor.sh
+sudo bash scripts/backup.sh
+sudo bash scripts/upgrade.sh
+sudo bash scripts/update.sh
+```
+
+一般使用者建議使用上方的 `vps-sentinel` 指令集，避免依賴目前所在目錄。
+
+---
+
+## 🔄 更新方式
+
+VPS Sentinel 與 Home Assistant 是兩套不同的更新流程，請依需求選擇：
+
+### 🛡️ 更新 VPS Sentinel 本身
+
+```bash
+sudo vps-sentinel upgrade
+```
+
+這會取得最新正式 Release，驗證版本與檔案、備份目前安裝內容，更新監控程式與維護工具；若新版本無法正常啟動，會自動回復舊版本。
+
+### 🏠 更新 Home Assistant
+
+```bash
+sudo vps-sentinel ha-update
+```
+
+這會先檢查 Home Assistant 設定並建立備份，再更新 Container 映像；若更新後無法恢復服務，會嘗試退回原本映像。
+
+也可以直接開啟：
+
+```bash
+sudo vps-sentinel
+```
+
+再從繁體中文選單選擇「系統維護」或「管理 Home Assistant」。
+
+> 從 GitHub 下載的專案原始碼現在將更新腳本放在 `scripts/upgrade.sh` 與 `scripts/update.sh`；完成安裝後，仍應優先使用上面的系統指令。
 
 ---
 
@@ -168,13 +216,13 @@ sudo vps-sentinel-apple --apply
 .
 ├── setup.sh                         # 一條龍安裝入口
 ├── scripts/                         # 維護、更新、備份與移除工具
-│   ├── manage.sh                    # 繁體中文維護中心
+│   ├── manage.sh                    # 繁體中文維護中心與指令集
 │   ├── doctor.sh                    # 健康檢查與修復
 │   ├── backup.sh                    # 設定備份與還原
 │   ├── automations.sh               # Home Assistant 自動化藍圖管理
 │   ├── apple-dashboard.sh           # Apple 風格儀表板安裝器
-│   ├── update.sh                    # Home Assistant 更新工具
-│   ├── upgrade.sh                   # VPS Sentinel 升級工具
+│   ├── update.sh                    # Home Assistant 安全更新工具
+│   ├── upgrade.sh                   # VPS Sentinel 安全升級工具
 │   └── uninstall.sh                 # 安全移除工具
 ├── vps-monitor/                     # VPS 狀態收集與 MQTT 發布服務
 │   ├── vps_monitor.py
