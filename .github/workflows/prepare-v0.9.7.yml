@@ -1,21 +1,25 @@
-name: Prepare v0.9.7
+name: Prepare and publish v0.9.7
 
 on:
-  pull_request:
+  push:
     branches:
       - main
 
 permissions:
   contents: write
 
+concurrency:
+  group: prepare-v0.9.7
+  cancel-in-progress: false
+
 jobs:
-  prepare:
+  release:
     if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: release/v0.9.7
+          ref: main
           fetch-depth: 0
 
       - name: Prepare version files
@@ -26,6 +30,9 @@ jobs:
           old = "0.9.6"
           new = "0.9.7"
 
+          current = Path("VERSION").read_text(encoding="utf-8").strip()
+          if current != old:
+              raise SystemExit(f"預期版本為 {old}，目前是 {current}")
           Path("VERSION").write_text(f"{new}\n", encoding="utf-8")
 
           for filename in [
@@ -41,8 +48,7 @@ jobs:
           changelog = Path("CHANGELOG.md")
           content = changelog.read_text(encoding="utf-8")
           heading = "## 0.9.7 — 專案更乾淨，指令也更一致"
-          if heading not in content:
-              section = """## 0.9.7 — 專案更乾淨，指令也更一致
+          section = """## 0.9.7 — 專案更乾淨，指令也更一致
 
 這個版本完成專案結構整理，讓根目錄保持簡潔，同時修正 Apple 面板指令與安裝器驗證，日常維護方式也更加一致。
 
@@ -60,13 +66,17 @@ jobs:
 - 移除不再需要的 AI 筆記與舊版相容層，避免專案內容重複或過時。
 
 """
+          if heading not in content:
               marker = "---\n\n"
               if marker not in content:
                   raise SystemExit("CHANGELOG 找不到版本區段插入位置")
               content = content.replace(marker, marker + section, 1)
               changelog.write_text(content, encoding="utf-8")
+          Path("/tmp/v0.9.7-release-notes.md").write_text(
+              section, encoding="utf-8"
+          )
 
-      - name: Remove preparation workflow
+      - name: Remove one-time workflow
         run: git rm .github/workflows/prepare-v0.9.7.yml
 
       - name: Validate release candidate
@@ -77,6 +87,7 @@ jobs:
           shellcheck setup.sh scripts/*.sh vps-monitor/install.sh
           node --check home-assistant/www/vps-sentinel-apple-card.js
           ruby -e "require 'yaml'; Dir['home-assistant/blueprints/*.yaml'].each { |file| YAML.parse_file(file) }"
+          ruby -e 'require "yaml"; source = File.read("scripts/manage.sh"); dashboard = source.match(/cat > "\$\{DASHBOARD_FILE\}" <<YAML\n(.*?)\nYAML/m).captures.first; YAML.parse(dashboard.gsub("${vps_id}", "demo"))'
           python3 -m pip install -r vps-monitor/requirements.txt
           python3 -m unittest discover -s tests -v
           python3 -m py_compile vps-monitor/vps_monitor.py tests/test_vps_monitor.py tests/test_command_interface.py
@@ -84,12 +95,30 @@ jobs:
           test "$(cat VERSION)" = "0.9.7"
           grep -q 'RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.9.7"' scripts/apple-dashboard.sh
 
-      - name: Commit release preparation
+      - name: Commit release
+        id: commit
         shell: bash
         run: |
           set -Eeuo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
-          git commit -m "release: prepare v0.9.7"
-          git push origin HEAD:release/v0.9.7
+          git commit -m "release: v0.9.7"
+          git push origin HEAD:main
+          echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.commit.outputs.sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if gh release view v0.9.7 >/dev/null 2>&1; then
+            echo "v0.9.7 已存在，略過重複發布。"
+            exit 0
+          fi
+          gh release create v0.9.7 \
+            --target "${RELEASE_SHA}" \
+            --title "VPS Sentinel v0.9.7" \
+            --notes-file /tmp/v0.9.7-release-notes.md
