@@ -35,22 +35,22 @@ if [[ ! -f "${REPO_DIR}/vps-monitor/vps_monitor.py" ]]; then
   red "專案檔案不完整，請在 repository 根目錄執行 setup.sh。"
   exit 1
 fi
-if [[ ! -f "${REPO_DIR}/update.sh" ]]; then
+if [[ ! -f "${REPO_DIR}/scripts/update.sh" ]]; then
   red "找不到 update.sh，請先重新下載完整專案。"
   exit 1
 fi
-if [[ ! -f "${REPO_DIR}/uninstall.sh" ]]; then
+if [[ ! -f "${REPO_DIR}/scripts/uninstall.sh" ]]; then
   red "找不到 uninstall.sh，請先重新下載完整專案。"
   exit 1
 fi
-if [[ ! -f "${REPO_DIR}/manage.sh" ]]; then
+if [[ ! -f "${REPO_DIR}/scripts/manage.sh" ]]; then
   red "找不到 manage.sh，請先重新下載完整專案。"
   exit 1
 fi
-if [[ ! -f "${REPO_DIR}/upgrade.sh" || ! -f "${REPO_DIR}/VERSION" ||
-      ! -f "${REPO_DIR}/doctor.sh" || ! -f "${REPO_DIR}/backup.sh" ||
-      ! -f "${REPO_DIR}/automations.sh" ||
-      ! -f "${REPO_DIR}/apple-dashboard.sh" ||
+if [[ ! -f "${REPO_DIR}/scripts/upgrade.sh" || ! -f "${REPO_DIR}/VERSION" ||
+      ! -f "${REPO_DIR}/scripts/doctor.sh" || ! -f "${REPO_DIR}/scripts/backup.sh" ||
+      ! -f "${REPO_DIR}/scripts/automations.sh" ||
+      ! -f "${REPO_DIR}/scripts/apple-dashboard.sh" ||
       ! -f "${REPO_DIR}/home-assistant/www/vps-sentinel-apple-card.js" ||
       ! -d "${REPO_DIR}/home-assistant/blueprints" ]]; then
   red "找不到升級工具或版本檔，請先重新下載完整專案。"
@@ -506,21 +506,21 @@ systemctl daemon-reload
 systemctl enable vps-monitor
 systemctl restart vps-monitor
 green "VPS Monitor 已啟動並設為開機自動執行"
-install -m 0755 "${REPO_DIR}/update.sh" \
+install -m 0755 "${REPO_DIR}/scripts/update.sh" \
   /usr/local/sbin/vps-sentinel-update
-install -m 0755 "${REPO_DIR}/uninstall.sh" \
+install -m 0755 "${REPO_DIR}/scripts/uninstall.sh" \
   /usr/local/sbin/vps-sentinel-uninstall
-install -m 0755 "${REPO_DIR}/manage.sh" \
+install -m 0755 "${REPO_DIR}/scripts/manage.sh" \
   /usr/local/sbin/vps-sentinel
-install -m 0755 "${REPO_DIR}/upgrade.sh" \
+install -m 0755 "${REPO_DIR}/scripts/upgrade.sh" \
   /usr/local/sbin/vps-sentinel-upgrade
-install -m 0755 "${REPO_DIR}/doctor.sh" \
+install -m 0755 "${REPO_DIR}/scripts/doctor.sh" \
   /usr/local/sbin/vps-sentinel-doctor
-install -m 0755 "${REPO_DIR}/backup.sh" \
+install -m 0755 "${REPO_DIR}/scripts/backup.sh" \
   /usr/local/sbin/vps-sentinel-backup
-install -m 0755 "${REPO_DIR}/automations.sh" \
+install -m 0755 "${REPO_DIR}/scripts/automations.sh" \
   /usr/local/sbin/vps-sentinel-automations
-install -m 0755 "${REPO_DIR}/apple-dashboard.sh" \
+install -m 0755 "${REPO_DIR}/scripts/apple-dashboard.sh" \
   /usr/local/sbin/vps-sentinel-apple
 install -m 0644 \
   "${REPO_DIR}/home-assistant/www/vps-sentinel-apple-card.js" \
