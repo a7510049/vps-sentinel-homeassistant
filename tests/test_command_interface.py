@@ -4,15 +4,16 @@ import unittest
 
 
 ROOT = Path(__file__).parents[1]
-MANAGE = (ROOT / "manage.sh").read_text(encoding="utf-8")
+SCRIPTS = ROOT / "scripts"
+MANAGE = (SCRIPTS / "manage.sh").read_text(encoding="utf-8")
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 SUBTOOLS = {
-    name: (ROOT / name).read_text(encoding="utf-8")
+    name: (SCRIPTS / name).read_text(encoding="utf-8")
     for name in ["doctor.sh", "backup.sh", "automations.sh", "uninstall.sh"]
 }
-HA_UPDATE = (ROOT / "update.sh").read_text(encoding="utf-8")
-SENTINEL_UPGRADE = (ROOT / "upgrade.sh").read_text(encoding="utf-8")
-APPLE_DASHBOARD = (ROOT / "apple-dashboard.sh").read_text(encoding="utf-8")
+HA_UPDATE = (SCRIPTS / "update.sh").read_text(encoding="utf-8")
+SENTINEL_UPGRADE = (SCRIPTS / "upgrade.sh").read_text(encoding="utf-8")
+APPLE_DASHBOARD = (SCRIPTS / "apple-dashboard.sh").read_text(encoding="utf-8")
 APPLE_CARD = (
     ROOT / "home-assistant" / "www" / "vps-sentinel-apple-card.js"
 ).read_text(encoding="utf-8")
@@ -20,7 +21,7 @@ MONITOR_SERVICE = (
     ROOT / "vps-monitor" / "vps-monitor.service"
 ).read_text(encoding="utf-8")
 SETUP = (ROOT / "setup.sh").read_text(encoding="utf-8")
-UNINSTALL = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
+UNINSTALL = (SCRIPTS / "uninstall.sh").read_text(encoding="utf-8")
 
 
 class CommandInterfaceTests(unittest.TestCase):
