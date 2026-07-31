@@ -1,0 +1,171 @@
+name: Apply maintenance notification fix v2
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: >-
+      github.actor != 'github-actions[bot]' &&
+      github.head_ref == 'fix/maintenance-notification-replay'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/maintenance-notification-replay
+          fetch-depth: 0
+
+      - name: Apply corrected patch script
+        shell: python
+        run: |
+          from pathlib import Path
+
+          workflow = Path(
+              ".github/workflows/apply-maintenance-notification-fix.yml"
+          ).read_text(encoding="utf-8")
+          marker = (
+              "      - name: Patch persistent state and transient events\n"
+              "        shell: python\n"
+              "        run: |\n"
+          )
+          start = workflow.index(marker) + len(marker)
+          end = workflow.index("\n      - name: Remove one-time workflow", start)
+          lines = workflow[start:end].splitlines()
+          script = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in lines
+          )
+
+          broken_start = script.index("old_request = '''")
+          broken_end_marker = 'card_path.write_text(card, encoding="utf-8")'
+          broken_end = script.index(broken_end_marker, broken_start)
+          broken_end += len(broken_end_marker)
+          corrected = r'''request_anchor = '''    const requestId = globalThis.crypto?.randomUUID?.()
+              || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            try {'''
+          request_replacement = '''    const requestId = globalThis.crypto?.randomUUID?.()
+              || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            this._activeMaintenanceRequest = {
+              requestId,
+              action,
+              startedAt: Date.now(),
+            };
+            try {'''
+          if request_anchor not in card:
+              raise SystemExit("找不到 request 建立區段")
+          card = card.replace(request_anchor, request_replacement, 1)
+
+          sending_anchor = '''        at: Date.now(),
+                action,
+                expiresAt: Date.now() + 15000,'''
+          sending_replacement = '''        at: Date.now(),
+                action,
+                requestId,
+                expiresAt: Date.now() + 15000,'''
+          if card.count(sending_anchor) != 2:
+              raise SystemExit("找不到兩個 sending state 區段")
+          card = card.replace(sending_anchor, sending_replacement, 2)
+
+          failed_anchor = '''        at: Date.now(),
+                action,
+                expiresAt: Date.now() + 5000,'''
+          failed_replacement = '''        at: Date.now(),
+                action,
+                requestId,
+                expiresAt: Date.now() + 5000,'''
+          if failed_anchor not in card:
+              raise SystemExit("找不到 local failed state 區段")
+          card = card.replace(failed_anchor, failed_replacement, 1)
+          card_path.write_text(card, encoding="utf-8")'''
+          script = script[:broken_start] + corrected + script[broken_end:]
+          exec(compile(script, "maintenance-fix", "exec"), {})
+
+      - name: Remove one-time files
+        run: |
+          git rm .github/workflows/apply-maintenance-notification-fix.yml
+          git rm .github/workflows/apply-maintenance-notification-fix-v2.yml
+          git rm .github/.maintenance-notification-fix-trigger
+
+      - name: Validate focused fix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install -r vps-monitor/requirements.txt
+          python3 -m unittest discover -s tests -v
+          python3 -m py_compile vps-monitor/vps_monitor.py
+          node --check home-assistant/www/vps-sentinel-apple-card.js
+          python3 - <<'PY'
+          import importlib.util
+          import json
+          import os
+          from pathlib import Path
+          from unittest.mock import patch
+
+          os.environ.setdefault("MQTT_HOST", "127.0.0.1")
+          path = Path("vps-monitor/vps_monitor.py")
+          spec = importlib.util.spec_from_file_location("monitor", path)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+
+          class Client:
+              def __init__(self):
+                  self.messages = []
+              def publish(self, topic, payload, **kwargs):
+                  self.messages.append((topic, json.loads(payload), kwargs))
+
+          client = Client()
+          controller = module.MaintenanceController(
+              client,
+              enabled=True,
+              clock=lambda: 1000,
+              wall_clock=lambda: 2000,
+          )
+          controller.last_started["refresh"] = 1000
+          payload = json.dumps({
+              "action": "refresh",
+              "request_id": "live-request",
+              "issued_at": 2000000,
+          })
+          assert controller.submit(payload) is False
+          topic, event, options = client.messages[-1]
+          assert topic == module.MAINTENANCE_EVENT
+          assert event["event_type"] == "cooldown"
+          assert event["request_id"] == "live-request"
+          assert options["retain"] is False
+
+          client.messages.clear()
+          with patch.object(module, "maintenance_result", return_value=(True, "完成")):
+              controller.last_started.clear()
+              controller._execute("refresh", "completed-request")
+          assert client.messages[0][0] == module.MAINTENANCE_STATE
+          assert client.messages[0][1]["state"] == "running"
+          assert client.messages[0][2]["retain"] is True
+          assert client.messages[1][0] == module.MAINTENANCE_EVENT
+          assert client.messages[1][1]["event_type"] == "success"
+          assert client.messages[1][1]["request_id"] == "completed-request"
+          assert client.messages[1][2]["retain"] is False
+          assert client.messages[2][1]["state"] == "idle"
+          assert client.messages[2][2]["retain"] is True
+
+          card = Path("home-assistant/www/vps-sentinel-apple-card.js").read_text()
+          assert "_matchingMaintenanceEvent" in card
+          assert "attributes.request_id !== request.requestId" in card
+          assert "!transientStates.has(backendState)" in card
+          assert "localStorage" not in card
+          PY
+          git diff --check
+
+      - name: Commit focused fix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: prevent stale maintenance notifications after reload"
+          git push origin HEAD:fix/maintenance-notification-replay
