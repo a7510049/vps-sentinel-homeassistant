@@ -3,6 +3,12 @@ set -Eeuo pipefail
 
 readonly ENV_FILE="/etc/vps-monitor.env"
 readonly HA_DIR="/opt/homeassistant"
+readonly HA_CONFIG="${HA_DIR}/config/configuration.yaml"
+readonly CARD_SOURCE="/opt/vps-monitor/vps-sentinel-apple-card.js"
+readonly CARD_TARGET="${HA_DIR}/config/www/vps-sentinel-apple-card.js"
+readonly MQTT_PASSWD="/etc/mosquitto/passwd"
+readonly CREDENTIALS_FILE="/root/vps-homeassistant-credentials.txt"
+readonly IP_BANS="${HA_DIR}/config/ip_bans.yaml"
 readonly REPORT_DIR="/root/vps-sentinel-reports"
 
 green()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
@@ -23,6 +29,7 @@ declare -a RESULTS=()
 PASS_COUNT=0
 WARN_COUNT=0
 FAIL_COUNT=0
+MQTT_PROBE_RESULT="未檢查"
 
 record() {
   local level="$1" item="$2" detail="$3"
@@ -32,6 +39,14 @@ record() {
     WARN) ((WARN_COUNT += 1)); yellow "${item}：${detail}" ;;
     FAIL) ((FAIL_COUNT += 1)); red "${item}：${detail}" ;;
   esac
+}
+
+read_env() {
+  local key="$1" value
+  value="$(sed -n "s/^${key}=//p" "${ENV_FILE}" 2>/dev/null | tail -n 1)"
+  value="${value#\"}"
+  value="${value%\"}"
+  printf '%s' "${value}"
 }
 
 service_check() {
@@ -44,6 +59,33 @@ service_check() {
   else
     record FAIL "${label}" "服務未運行"
   fi
+}
+
+mqtt_probe() {
+  local host port username password vps_id output
+  host="$(read_env MQTT_HOST)"
+  port="$(read_env MQTT_PORT)"
+  username="$(read_env MQTT_USERNAME)"
+  password="$(read_env MQTT_PASSWORD)"
+  vps_id="$(read_env VPS_ID)"
+  if [[ -z "${host}" || -z "${username}" || -z "${vps_id}" ]]; then
+    MQTT_PROBE_RESULT="設定不完整"
+    return 1
+  fi
+  if output="$(timeout 12 mosquitto_sub \
+      -h "${host}" -p "${port:-1883}" \
+      -u "${username}" -P "${password}" \
+      -t "vps/${vps_id}/online" -C 1 2>&1)" &&
+     grep -qx 'ON' <<< "${output}"; then
+    MQTT_PROBE_RESULT="認證與資料正常"
+    return 0
+  fi
+  if grep -qiE 'not authorized|connection refused|拒絕' <<< "${output}"; then
+    MQTT_PROBE_RESULT="認證失敗"
+  else
+    MQTT_PROBE_RESULT="未收到在線資料"
+  fi
+  return 1
 }
 
 check_environment() {
@@ -88,40 +130,45 @@ check_disk() {
 }
 
 check_mqtt() {
-  local recent
   service_check mosquitto "MQTT Broker"
   if command -v ss >/dev/null 2>&1 &&
      ss -lnt 2>/dev/null | awk '{print $4}' |
-       grep -Eq '(^|:|\])1883$'; then
-    record PASS "MQTT 連接埠" "1883 正在監聽"
+       grep -Eq '127\.0\.0\.1:1883$'; then
+    record PASS "MQTT 連接埠" "只在本機 127.0.0.1:1883 監聽"
   else
-    record FAIL "MQTT 連接埠" "1883 未監聽"
+    record FAIL "MQTT 連接埠" "未偵測到本機限定的 1883 監聽"
   fi
-  recent="$(journalctl -u vps-monitor --since '-30 minutes' --no-pager \
-    2>/dev/null || true)"
-  if grep -q 'MQTT 已連線' <<< "${recent}"; then
-    record PASS "MQTT 連線" "監控程式近期曾成功連線"
-  elif grep -Eq 'ConnectionRefused|MQTT 連線遭拒|Name or service not known' \
-      <<< "${recent}"; then
-    record FAIL "MQTT 連線" "近期日誌顯示連線失敗"
+  if command -v mosquitto_sub >/dev/null 2>&1 && mqtt_probe; then
+    record PASS "MQTT 實際登入" "${MQTT_PROBE_RESULT}"
   else
-    record WARN "MQTT 連線" "近期日誌沒有足夠資訊"
+    record FAIL "MQTT 實際登入" "${MQTT_PROBE_RESULT}"
   fi
 }
 
 check_home_assistant() {
-  local health
+  local health compose_name
   if ! command -v docker >/dev/null 2>&1; then
     record WARN "Docker" "未安裝，略過 Home Assistant Container 檢查"
     return
   fi
   service_check docker "Docker"
+  if [[ -f "${HA_DIR}/compose.yaml" ]]; then
+    compose_name="compose.yaml"
+  elif [[ -f "${HA_DIR}/docker-compose.yml" ]]; then
+    compose_name="docker-compose.yml（舊格式）"
+  else
+    compose_name="找不到"
+  fi
+  if [[ "${compose_name}" == "找不到" ]]; then
+    record FAIL "Compose 設定" "找不到 Home Assistant Compose 檔"
+  else
+    record PASS "Compose 設定" "${compose_name}"
+  fi
   if ! docker inspect homeassistant >/dev/null 2>&1; then
     record WARN "Home Assistant" "找不到本專案管理的 Container"
     return
   fi
-  health="$(docker inspect -f '{{.State.Status}}' homeassistant 2>/dev/null ||
-    true)"
+  health="$(docker inspect -f '{{.State.Status}}' homeassistant 2>/dev/null || true)"
   if [[ "${health}" == "running" ]]; then
     record PASS "Home Assistant Container" "運作正常"
   else
@@ -138,10 +185,24 @@ check_home_assistant() {
   else
     record FAIL "Home Assistant 網頁" "本機 8123 無法連線"
   fi
+
+  if grep -q '^[[:space:]]*use_x_forwarded_for:[[:space:]]*true' "${HA_CONFIG}" \
+      2>/dev/null &&
+     grep -q '^[[:space:]]*-[[:space:]]*127\.0\.0\.1[[:space:]]*$' \
+      "${HA_CONFIG}" 2>/dev/null; then
+    record PASS "反向代理設定" "已信任本機 Tailscale Serve 代理"
+  else
+    record WARN "反向代理設定" "缺少 use_x_forwarded_for 或 trusted_proxies"
+  fi
+  if [[ -s "${IP_BANS}" ]]; then
+    record WARN "登入封鎖" "ip_bans.yaml 目前有封鎖紀錄"
+  else
+    record PASS "登入封鎖" "沒有持續的 IP 封鎖紀錄"
+  fi
 }
 
 check_tailscale() {
-  local state
+  local state serve
   if ! command -v tailscale >/dev/null 2>&1; then
     record WARN "Tailscale" "未安裝"
     return
@@ -154,6 +215,33 @@ check_tailscale() {
   else
     record WARN "Tailscale" "狀態：${state:-無法讀取}"
   fi
+  serve="$(tailscale serve status 2>/dev/null || true)"
+  if grep -q '127.0.0.1:8123' <<< "${serve}"; then
+    record PASS "Tailscale Serve" "已代理到 Home Assistant"
+  else
+    record WARN "Tailscale Serve" "未偵測到 127.0.0.1:8123"
+  fi
+}
+
+card_version() {
+  sed -n 's/^const CARD_VERSION = "\([^"]*\)";.*/\1/p' "$1" 2>/dev/null |
+    head -n 1
+}
+
+check_apple_card() {
+  local installed source_version
+  installed="$(cat /opt/vps-monitor/.version 2>/dev/null || true)"
+  source_version="$(card_version "${CARD_SOURCE}")"
+  if [[ -f "${CARD_SOURCE}" && "${source_version}" == "${installed}" ]]; then
+    record PASS "Apple 卡片來源" "版本 ${source_version}"
+  else
+    record WARN "Apple 卡片來源" "專案版本與卡片版本不同步"
+  fi
+  if [[ -f "${CARD_TARGET}" ]] && cmp -s "${CARD_SOURCE}" "${CARD_TARGET}"; then
+    record PASS "Apple 卡片資源" "Home Assistant 已使用最新檔案"
+  else
+    record WARN "Apple 卡片資源" "需要執行 sudo vps-sentinel apple"
+  fi
 }
 
 run_checks() {
@@ -161,16 +249,112 @@ run_checks() {
   PASS_COUNT=0
   WARN_COUNT=0
   FAIL_COUNT=0
+  MQTT_PROBE_RESULT="未檢查"
   check_environment
   heading "服務與連線"
   service_check vps-monitor "VPS Sentinel"
   check_mqtt
   check_home_assistant
   check_tailscale
+  check_apple_card
   heading "主機資源"
   check_disk
   echo
   echo "檢查完成：${PASS_COUNT} 項正常、${WARN_COUNT} 項提醒、${FAIL_COUNT} 項異常"
+}
+
+save_monitor_credential() {
+  local password="$1"
+  python3 - "${CREDENTIALS_FILE}" "${password}" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+password = sys.argv[2]
+lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else [
+    "VPS Monitor 安裝憑證",
+]
+lines = [
+    line for line in lines
+    if not line.startswith("VPS Monitor MQTT 使用者：")
+    and not line.startswith("VPS Monitor MQTT 密碼：")
+]
+while lines and not lines[-1].strip():
+    lines.pop()
+lines.extend([
+    "",
+    "VPS Monitor MQTT 使用者：vps-monitor",
+    f"VPS Monitor MQTT 密碼：{password}",
+])
+path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+  chmod 0600 "${CREDENTIALS_FILE}"
+}
+
+reset_monitor_mqtt_password() {
+  local new_password backup_passwd backup_env answer
+  [[ -f "${MQTT_PASSWD}" && -f "${ENV_FILE}" ]] || {
+    red "找不到 MQTT 密碼檔或監控設定檔"
+    return 1
+  }
+  read -r -p "確定重新同步 vps-monitor 的 MQTT 密碼嗎？[y/N]：" answer
+  [[ "${answer,,}" =~ ^(y|yes|是)$ ]] || return
+  new_password="$(openssl rand -hex 24)"
+  backup_passwd="${MQTT_PASSWD}.backup.$(date +%Y%m%d-%H%M%S)"
+  backup_env="${ENV_FILE}.backup.$(date +%Y%m%d-%H%M%S)"
+  cp -a "${MQTT_PASSWD}" "${backup_passwd}"
+  cp -a "${ENV_FILE}" "${backup_env}"
+  if ! mosquitto_passwd -b "${MQTT_PASSWD}" vps-monitor "${new_password}"; then
+    red "無法更新 Mosquitto 密碼"
+    return 1
+  fi
+  python3 - "${ENV_FILE}" "${new_password}" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+password = sys.argv[2]
+lines = path.read_text(encoding="utf-8").splitlines()
+replacement = f'MQTT_PASSWORD="{password}"'
+for index, line in enumerate(lines):
+    if line.startswith("MQTT_PASSWORD="):
+        lines[index] = replacement
+        break
+else:
+    lines.append(replacement)
+path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+  chown root:mosquitto "${MQTT_PASSWD}"
+  chmod 0640 "${MQTT_PASSWD}"
+  chown root:root "${ENV_FILE}"
+  chmod 0600 "${ENV_FILE}"
+  if systemctl restart mosquitto && systemctl restart vps-monitor &&
+     sleep 5 && mqtt_probe; then
+    save_monitor_credential "${new_password}"
+    rm -f -- "${backup_passwd}" "${backup_env}"
+    green "VPS Monitor MQTT 密碼已同步，實際登入成功"
+    green "新密碼已保存於 ${CREDENTIALS_FILE}（僅 root 可讀）"
+    return
+  fi
+  cp -a "${backup_passwd}" "${MQTT_PASSWD}"
+  cp -a "${backup_env}" "${ENV_FILE}"
+  chown root:mosquitto "${MQTT_PASSWD}"
+  chmod 0640 "${MQTT_PASSWD}"
+  systemctl restart mosquitto || true
+  systemctl restart vps-monitor || true
+  red "同步後驗證失敗，已回復原設定"
+  return 1
+}
+
+clear_ip_bans() {
+  local confirmation
+  yellow "請先完全關閉正在反覆登入失敗的 Home Assistant App。"
+  read -r -p "若要清除封鎖，請輸入：清除封鎖 > " confirmation
+  [[ "${confirmation}" == "清除封鎖" ]] || return
+  if [[ -f "${IP_BANS}" ]]; then
+    mv "${IP_BANS}" "${IP_BANS}.backup.$(date +%Y%m%d-%H%M%S)"
+  fi
+  (cd "${HA_DIR}" && docker compose restart homeassistant)
+  green "Home Assistant IP 封鎖已清除"
 }
 
 safe_repairs() {
@@ -180,6 +364,9 @@ safe_repairs() {
   echo "  2. 重新載入並啟動 VPS Sentinel"
   echo "  3. 驗證後重新啟動 Home Assistant"
   echo "  4. 重新啟動 Mosquitto"
+  echo "  5. 同步 VPS Monitor MQTT 密碼"
+  echo "  6. 同步 Apple 卡片前端檔案"
+  echo "  7. 清除 Home Assistant IP 封鎖"
   echo "  0. 返回上一層"
   read -r -p "請選擇 [0]：" choice
   case "${choice:-0}" in
@@ -194,11 +381,11 @@ safe_repairs() {
       ;;
     2)
       systemctl daemon-reload
-      if systemctl restart vps-monitor &&
-         systemctl is-active --quiet vps-monitor; then
-        green "VPS Sentinel 已重新啟動"
+      if systemctl restart vps-monitor && sleep 3 && mqtt_probe; then
+        green "VPS Sentinel 已重新啟動，MQTT 資料正常"
       else
-        red "啟動失敗，請查看 journalctl -u vps-monitor -n 50"
+        red "啟動或 MQTT 驗證失敗"
+        journalctl -u vps-monitor -n 50 --no-pager || true
       fi
       ;;
     3)
@@ -211,20 +398,26 @@ safe_repairs() {
       fi
       ;;
     4)
-      if systemctl restart mosquitto &&
-         systemctl is-active --quiet mosquitto; then
+      if systemctl restart mosquitto && systemctl is-active --quiet mosquitto; then
         green "Mosquitto 已重新啟動"
       else
         red "Mosquitto 啟動失敗"
       fi
       ;;
+    5) reset_monitor_mqtt_password ;;
+    6)
+      install -d -m 0755 "$(dirname "${CARD_TARGET}")"
+      install -m 0644 "${CARD_SOURCE}" "${CARD_TARGET}"
+      green "Apple 卡片已同步；不需要重新啟動 Home Assistant"
+      ;;
+    7) clear_ip_bans ;;
     0) return ;;
-    *) yellow "請輸入 0 到 4。" ;;
+    *) yellow "請輸入 0 到 7。" ;;
   esac
 }
 
 write_report() {
-  local report version os_name kernel
+  local report version os_name kernel compose card
   install -d -m 0700 "${REPORT_DIR}"
   report="${REPORT_DIR}/report-$(date +%Y%m%d-%H%M%S).txt"
   version="$(cat /opt/vps-monitor/.version 2>/dev/null || echo unknown)"
@@ -232,6 +425,14 @@ write_report() {
     head -n 1 | tr -d '"' || true)"
   os_name="${os_name:-Linux}"
   kernel="$(uname -r)"
+  if [[ -f "${HA_DIR}/compose.yaml" ]]; then
+    compose="compose.yaml"
+  elif [[ -f "${HA_DIR}/docker-compose.yml" ]]; then
+    compose="docker-compose.yml"
+  else
+    compose="missing"
+  fi
+  card="$(card_version "${CARD_SOURCE}")"
   {
     echo "VPS Sentinel 匿名診斷報告"
     echo "建立時間（UTC）：$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -239,6 +440,9 @@ write_report() {
     echo "系統：${os_name}"
     echo "核心：${kernel}"
     echo "架構：$(uname -m)"
+    echo "Compose：${compose}"
+    echo "Apple 卡片：${card:-unknown}"
+    echo "MQTT 驗證：${MQTT_PROBE_RESULT}"
     echo
     printf '%-6s | %-28s | %s\n' "結果" "項目" "說明"
     printf '%s\n' "----------------------------------------------------------------------"

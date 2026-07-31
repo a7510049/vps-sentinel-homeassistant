@@ -35,6 +35,49 @@ jobs:
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${version}" >> "${GITHUB_OUTPUT}"
 
+      - name: Check release consistency
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          card_version="$(sed -n 's/^const CARD_VERSION = "\([^"]*\)";.*/\1/p' \
+            home-assistant/www/vps-sentinel-apple-card.js | head -n 1)"
+          [[ "${card_version}" == "${version}" ]]
+          grep -q "^## ${version}" CHANGELOG.md
+          grep -q 'VERSION_FILE="/opt/vps-monitor/.version"' \
+            scripts/apple-dashboard.sh
+
+      - name: Check shell syntax
+        run: bash -n setup.sh scripts/*.sh vps-monitor/install.sh
+
+      - name: Run ShellCheck
+        run: shellcheck setup.sh scripts/*.sh vps-monitor/install.sh
+
+      - name: Check Apple card syntax
+        run: node --check home-assistant/www/vps-sentinel-apple-card.js
+
+      - name: Check YAML syntax
+        run: |
+          ruby -e "require 'yaml'; YAML.parse_file('.github/workflows/validate.yml'); YAML.parse_file('.github/workflows/release.yml')"
+          ruby -e "require 'yaml'; Dir['home-assistant/blueprints/*.yaml'].each { |file| YAML.parse_file(file) }"
+
+      - name: Install Python dependencies
+        run: python3 -m pip install -r vps-monitor/requirements.txt
+
+      - name: Run Python tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Check Python syntax
+        run: >-
+          python3 -m py_compile
+          vps-monitor/vps_monitor.py
+          tests/test_vps_monitor.py
+          tests/test_command_interface.py
+          tests/test_release_integrity.py
+
+      - name: Check whitespace errors
+        run: git diff --check HEAD^ HEAD
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

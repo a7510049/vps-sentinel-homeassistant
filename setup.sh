@@ -110,6 +110,149 @@ backup_if_exists() {
   fi
 }
 
+read_env_file() {
+  local key="$1" value
+  value="$(sed -n "s/^${key}=//p" "${MONITOR_ENV}" 2>/dev/null | tail -n 1)"
+  value="${value#\"}"
+  value="${value%\"}"
+  printf '%s' "${value}"
+}
+
+credential_value() {
+  local label="$1"
+  sed -n "s/^${label}：//p" "${CREDENTIALS_FILE}" 2>/dev/null | tail -n 1
+}
+
+write_credentials() {
+  local ha_password="$1" monitor_password="$2" temporary
+  ha_password="${ha_password:-$(credential_value "Home Assistant MQTT 密碼")}"
+  monitor_password="${monitor_password:-$(credential_value "VPS Monitor MQTT 密碼")}"
+  if [[ -z "${ha_password}" && -z "${monitor_password}" ]]; then
+    return
+  fi
+  temporary="$(mktemp)"
+  umask 077
+  {
+    echo "VPS Monitor 安裝憑證"
+    echo "更新時間：$(date --iso-8601=seconds)"
+    echo
+    if [[ -n "${ha_password}" ]]; then
+      echo "Home Assistant MQTT 使用者：home-assistant"
+      echo "Home Assistant MQTT 密碼：${ha_password}"
+    fi
+    if [[ -n "${monitor_password}" ]]; then
+      echo "VPS Monitor MQTT 使用者：vps-monitor"
+      echo "VPS Monitor MQTT 密碼：${monitor_password}"
+    fi
+  } > "${temporary}"
+  install -m 0600 "${temporary}" "${CREDENTIALS_FILE}"
+  rm -f -- "${temporary}"
+}
+
+mqtt_probe() {
+  local host port username password vps_id output
+  host="$(read_env_file MQTT_HOST)"
+  port="$(read_env_file MQTT_PORT)"
+  username="$(read_env_file MQTT_USERNAME)"
+  password="$(read_env_file MQTT_PASSWORD)"
+  vps_id="$(read_env_file VPS_ID)"
+  [[ -n "${host}" && -n "${username}" && -n "${vps_id}" ]] || return 1
+  output="$(timeout 8 mosquitto_sub \
+    -h "${host}" -p "${port:-1883}" \
+    -u "${username}" -P "${password}" \
+    -t "vps/${vps_id}/online" -C 1 2>&1)" || return 1
+  grep -qx 'ON' <<< "${output}"
+}
+
+wait_for_monitor_mqtt() {
+  local started_at="$1" _
+  for _ in {1..15}; do
+    if journalctl -u vps-monitor --since "${started_at}" --no-pager \
+        2>/dev/null | grep -q 'MQTT 已連線' && mqtt_probe; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
+ensure_proxy_settings() {
+  python3 - "${HA_DIR}/config/configuration.yaml" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+lines = path.read_text(encoding="utf-8").splitlines()
+try:
+    start = next(i for i, line in enumerate(lines) if line == "http:")
+except StopIteration:
+    raise SystemExit(0)
+
+end = len(lines)
+for index in range(start + 1, len(lines)):
+    line = lines[index]
+    if line and not line[0].isspace() and line.rstrip().endswith(":"):
+        end = index
+        break
+
+
+def find_key(name):
+    prefix = f"  {name}:"
+    for index in range(start + 1, end):
+        if lines[index].startswith(prefix):
+            return index
+    return None
+
+
+server_index = find_key("server_host")
+use_index = find_key("use_x_forwarded_for")
+if use_index is None:
+    use_index = server_index if server_index is not None else start + 1
+    lines.insert(use_index, "  use_x_forwarded_for: true")
+    end += 1
+else:
+    lines[use_index] = "  use_x_forwarded_for: true"
+
+trusted_index = find_key("trusted_proxies")
+required = ["127.0.0.1", "::1"]
+if trusted_index is None:
+    lines[use_index + 1:use_index + 1] = [
+        "  trusted_proxies:",
+        "    - 127.0.0.1",
+        '    - "::1"',
+    ]
+else:
+    suffix = lines[trusted_index].split(":", 1)[1].strip()
+    if suffix:
+        lines[trusted_index:trusted_index + 1] = [
+            "  trusted_proxies:",
+            "    - 127.0.0.1",
+            '    - "::1"',
+        ]
+    else:
+        list_end = trusted_index + 1
+        existing = set()
+        while list_end < len(lines):
+            candidate = lines[list_end]
+            if candidate and not candidate.startswith("    "):
+                break
+            stripped = candidate.strip()
+            if stripped.startswith("-"):
+                existing.add(stripped[1:].strip().strip('"').strip("'"))
+            list_end += 1
+        additions = []
+        for value in required:
+            if value not in existing:
+                additions.append(
+                    "    - 127.0.0.1" if value == "127.0.0.1" else '    - "::1"'
+                )
+        lines[list_end:list_end] = additions
+
+path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+}
+
+
 clear
 printf '\033[1;35m'
 cat <<'BANNER'
@@ -230,30 +373,50 @@ fi
 green "Tailscale 已連線：${tailscale_ip}"
 
 blue "步驟 3/6：設定 Mosquitto"
-generated_ha_password=""
-generated_monitor_password=""
+saved_ha_password="$(credential_value "Home Assistant MQTT 密碼")"
+saved_monitor_password="$(credential_value "VPS Monitor MQTT 密碼")"
+existing_monitor_host="$(read_env_file MQTT_HOST)"
+existing_monitor_username="$(read_env_file MQTT_USERNAME)"
+existing_monitor_password="$(read_env_file MQTT_PASSWORD)"
+ha_password="${saved_ha_password}"
+monitor_password="${existing_monitor_password:-${saved_monitor_password}}"
 install -d -m 0755 /etc/mosquitto/conf.d
 
 if [[ ! -e "${MQTT_PASSWD}" ]]; then
-  generated_ha_password="$(openssl rand -hex 18)"
-  generated_monitor_password="$(openssl rand -hex 18)"
+  if [[ -z "${ha_password}" ]]; then
+    ha_password="$(openssl rand -hex 18)"
+  fi
+  if [[ -z "${monitor_password}" ]]; then
+    monitor_password="$(openssl rand -hex 18)"
+  fi
   mosquitto_passwd -b -c "${MQTT_PASSWD}" home-assistant \
-    "${generated_ha_password}"
+    "${ha_password}"
   mosquitto_passwd -b "${MQTT_PASSWD}" vps-monitor \
-    "${generated_monitor_password}"
+    "${monitor_password}"
   green "已自動建立兩個 MQTT 專用帳號"
 else
   if ! grep -q '^home-assistant:' "${MQTT_PASSWD}"; then
-    generated_ha_password="$(openssl rand -hex 18)"
+    if [[ -z "${ha_password}" ]]; then
+      ha_password="$(openssl rand -hex 18)"
+    fi
     mosquitto_passwd -b "${MQTT_PASSWD}" home-assistant \
-      "${generated_ha_password}"
+      "${ha_password}"
     green "已新增 home-assistant MQTT 帳號"
   fi
   if ! grep -q '^vps-monitor:' "${MQTT_PASSWD}"; then
-    generated_monitor_password="$(openssl rand -hex 18)"
+    if [[ -z "${monitor_password}" ]]; then
+      monitor_password="$(openssl rand -hex 18)"
+    fi
     mosquitto_passwd -b "${MQTT_PASSWD}" vps-monitor \
-      "${generated_monitor_password}"
+      "${monitor_password}"
     green "已新增 vps-monitor MQTT 帳號"
+  elif [[ -n "${monitor_password}" ]] &&
+       { [[ ! -e "${MONITOR_ENV}" ]] ||
+         { [[ "${existing_monitor_host}" == "127.0.0.1" ]] &&
+           [[ "${existing_monitor_username}" == "vps-monitor" ]]; }; }; then
+    mosquitto_passwd -b "${MQTT_PASSWD}" vps-monitor \
+      "${monitor_password}"
+    green "已同步 VPS Monitor MQTT 密碼"
   fi
 fi
 
@@ -282,23 +445,9 @@ if ! systemctl is-active --quiet mosquitto; then
 fi
 green "Mosquitto 已啟動，只監聽 127.0.0.1:1883"
 
-if [[ -n "${generated_ha_password}" || -n "${generated_monitor_password}" ]]; then
-  umask 077
-  {
-    echo "VPS Monitor 安裝憑證"
-    echo "建立時間：$(date --iso-8601=seconds)"
-    echo
-    [[ -n "${generated_ha_password}" ]] && \
-      echo "Home Assistant MQTT 使用者：home-assistant"
-    [[ -n "${generated_ha_password}" ]] && \
-      echo "Home Assistant MQTT 密碼：${generated_ha_password}"
-    [[ -n "${generated_monitor_password}" ]] && \
-      echo "VPS Monitor MQTT 使用者：vps-monitor"
-    [[ -n "${generated_monitor_password}" ]] && \
-      echo "VPS Monitor MQTT 密碼：${generated_monitor_password}"
-  } > "${CREDENTIALS_FILE}"
-  chmod 0600 "${CREDENTIALS_FILE}"
-  green "新密碼已保存於 ${CREDENTIALS_FILE}（僅 root 可讀）"
+write_credentials "${ha_password}" "${monitor_password}"
+if [[ -f "${CREDENTIALS_FILE}" ]]; then
+  green "MQTT 憑證已保存於 ${CREDENTIALS_FILE}（僅 root 可讀）"
 fi
 
 blue "步驟 4/6：部署 Home Assistant"
@@ -336,6 +485,10 @@ script: !include scripts.yaml
 scene: !include scenes.yaml
 
 http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 127.0.0.1
+    - "::1"
   server_host:
     - 127.0.0.1
     - ${tailscale_ip}
@@ -351,6 +504,10 @@ elif ! grep -q '^[[:space:]]*http:' \
   cat >> "${HA_DIR}/config/configuration.yaml" <<HAYAML
 
 http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 127.0.0.1
+    - "::1"
   server_host:
     - 127.0.0.1
     - ${tailscale_ip}
@@ -379,18 +536,19 @@ if tailscale serve --bg http://127.0.0.1:8123 &&
       "${HA_DIR}/config/configuration.yaml" &&
      grep -Fq "    - ${tailscale_ip}" \
       "${HA_DIR}/config/configuration.yaml"; then
-    backup_if_exists "${HA_DIR}/config/configuration.yaml"
-    if ! grep -q '^[[:space:]]*use_x_forwarded_for:' \
-        "${HA_DIR}/config/configuration.yaml"; then
-      sed -i '/^[[:space:]]*server_host:[[:space:]]*$/i\
-  use_x_forwarded_for: true\
-  trusted_proxies:\
-    - 127.0.0.1' "${HA_DIR}/config/configuration.yaml"
-    fi
+    proxy_backup="${HA_DIR}/config/configuration.yaml.backup.$(date +%Y%m%d-%H%M%S)"
+    cp -a "${HA_DIR}/config/configuration.yaml" "${proxy_backup}"
+    ensure_proxy_settings
     escaped_ip="${tailscale_ip//./\\.}"
     sed -Ei \
       "/^[[:space:]]*-[[:space:]]*${escaped_ip}[[:space:]]*$/d" \
       "${HA_DIR}/config/configuration.yaml"
+    if ! docker exec homeassistant python -m homeassistant \
+        --script check_config --config /config; then
+      cp -a "${proxy_backup}" "${HA_DIR}/config/configuration.yaml"
+      red "反向代理設定驗證失敗，已回復原設定。"
+      exit 1
+    fi
     (
       cd "${HA_DIR}"
       docker compose restart homeassistant
@@ -424,9 +582,15 @@ blue "步驟 5/6：設定 VPS Monitor"
 if [[ -e "${MONITOR_ENV}" ]]; then
   green "沿用既有 ${MONITOR_ENV}"
 else
-  if [[ -z "${generated_monitor_password}" ]]; then
-    ask_secret generated_monitor_password \
-      "請輸入既有 vps-monitor MQTT 密碼（輸入時不顯示）"
+  if [[ -z "${monitor_password}" ]]; then
+    ask_secret monitor_password \
+      "請設定 vps-monitor MQTT 密碼（輸入時不顯示）"
+    mosquitto_passwd -b "${MQTT_PASSWD}" vps-monitor \
+      "${monitor_password}"
+    chown root:mosquitto "${MQTT_PASSWD}"
+    chmod 0640 "${MQTT_PASSWD}"
+    systemctl restart mosquitto
+    write_credentials "${ha_password}" "${monitor_password}"
   fi
 
   default_id="$(hostname -s | tr '[:upper:]' '[:lower:]' |
@@ -460,7 +624,7 @@ else
     printf 'MQTT_HOST="127.0.0.1"\n'
     printf 'MQTT_PORT="1883"\n'
     printf 'MQTT_USERNAME="vps-monitor"\n'
-    printf 'MQTT_PASSWORD=%s\n' "$(env_quote "${generated_monitor_password}")"
+    printf 'MQTT_PASSWORD=%s\n' "$(env_quote "${monitor_password}")"
     printf 'MQTT_TLS="false"\n'
     printf 'MQTT_CA_FILE=""\n'
     printf 'VPS_ID=%s\n' "$(env_quote "${vps_id}")"
@@ -502,10 +666,17 @@ else
 fi
 install -m 0644 "${REPO_DIR}/vps-monitor/vps-monitor.service" \
   /etc/systemd/system/vps-monitor.service
+install -m 0644 "${REPO_DIR}/VERSION" "${MONITOR_DIR}/.version"
 systemctl daemon-reload
 systemctl enable vps-monitor
+monitor_started_at="$(date --iso-8601=seconds)"
 systemctl restart vps-monitor
-green "VPS Monitor 已啟動並設為開機自動執行"
+if ! wait_for_monitor_mqtt "${monitor_started_at}"; then
+  red "VPS Monitor 未能通過 MQTT 認證與在線資料驗證。"
+  journalctl -u vps-monitor -n 30 --no-pager || true
+  exit 1
+fi
+green "VPS Monitor 已啟動，MQTT 認證與在線資料正常"
 install -m 0755 "${REPO_DIR}/scripts/update.sh" \
   /usr/local/sbin/vps-sentinel-update
 install -m 0755 "${REPO_DIR}/scripts/uninstall.sh" \
@@ -528,8 +699,6 @@ install -m 0644 \
 install -d -m 0755 "${MONITOR_DIR}/blueprints"
 install -m 0644 "${REPO_DIR}"/home-assistant/blueprints/*.yaml \
   "${MONITOR_DIR}/blueprints/"
-install -m 0644 "${REPO_DIR}/VERSION" "${MONITOR_DIR}/.version"
-
 blue "步驟 6/6：最後檢查"
 sleep 3
 checks_failed=false
@@ -574,7 +743,7 @@ echo "MQTT 填寫："
 echo "  Broker：127.0.0.1"
 echo "  Port：1883"
 echo "  Username：home-assistant"
-if [[ -n "${generated_ha_password}" ]]; then
+if [[ -n "${ha_password}" ]]; then
   echo "  Password：請執行 sudo cat ${CREDENTIALS_FILE} 查看"
 else
   echo "  Password：使用你現有的 home-assistant MQTT 密碼"
