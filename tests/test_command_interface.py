@@ -21,6 +21,11 @@ MONITOR_SERVICE = (
     ROOT / "vps-monitor" / "vps-monitor.service"
 ).read_text(encoding="utf-8")
 SETUP = (ROOT / "setup.sh").read_text(encoding="utf-8")
+README = (ROOT / "README.md").read_text(encoding="utf-8")
+DOCS = (ROOT / "docs" / "mqtt-vps-setup.md").read_text(encoding="utf-8")
+STANDALONE_INSTALL = (ROOT / "vps-monitor" / "install.sh").read_text(
+    encoding="utf-8"
+)
 UNINSTALL = (SCRIPTS / "uninstall.sh").read_text(encoding="utf-8")
 
 
@@ -235,6 +240,45 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn('if ! rm -rf -- "${old_backup}"', SENTINEL_UPGRADE)
         self.assertIn("部分舊備份需要稍後手動清理", HA_UPDATE)
         self.assertIn("部分舊版備份需要稍後手動清理", SENTINEL_UPGRADE)
+
+
+    def test_unified_command_forwards_apple_apply_argument(self):
+        self.assertIn('shift 2', MANAGE)
+        self.assertIn('if ! "${command}" "$@"; then', MANAGE)
+        self.assertIn(
+            'apple) run_tool "Apple 風格面板" "${APPLE_COMMAND}" "$@" ;;',
+            MANAGE,
+        )
+        self.assertIn('run_command "$@"', MANAGE)
+        self.assertIn("sudo vps-sentinel apple --apply", APPLE_DASHBOARD)
+        self.assertIn("sudo vps-sentinel apple --apply", README)
+
+    def test_root_compatibility_links_support_0_9_6_upgrades(self):
+        names = [
+            "manage.sh", "update.sh", "upgrade.sh", "uninstall.sh",
+            "doctor.sh", "backup.sh", "automations.sh",
+            "apple-dashboard.sh",
+        ]
+        for name in names:
+            with self.subTest(name=name):
+                link = ROOT / name
+                self.assertTrue(link.is_symlink())
+                self.assertEqual(link.readlink(), Path("scripts") / name)
+        self.assertIn("scripts/manage.sh", SENTINEL_UPGRADE)
+
+    def test_installer_and_docs_use_current_command_interface(self):
+        self.assertIn("sudo vps-sentinel doctor", SETUP)
+        self.assertIn("sudo vps-sentinel upgrade", SETUP)
+        self.assertIn("sudo vps-sentinel ha-update", SETUP)
+        self.assertIn("sudo vps-sentinel ha-update", DOCS)
+        self.assertIn("sudo vps-sentinel upgrade", DOCS)
+
+    def test_standalone_installer_validates_percent_ranges(self):
+        self.assertNotIn("VPS HomeKit", STANDALONE_INSTALL)
+        self.assertIn("require_percent()", STANDALONE_INSTALL)
+        for label in ["CPU 門檻", "記憶體門檻", "磁碟門檻"]:
+            self.assertIn(f'require_percent "{label}"', STANDALONE_INSTALL)
+        self.assertIn("value >= 1 && value <= 100", STANDALONE_INSTALL)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,1 @@
+scripts/automations.sh

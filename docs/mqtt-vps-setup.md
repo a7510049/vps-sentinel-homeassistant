@@ -2,6 +2,8 @@
 
 這份指南適用於以下架構：
 
+> 一般使用者建議從專案根目錄執行 `sudo bash setup.sh`。第 7 節的 `vps-monitor/install.sh` 是只安裝監控服務的進階／獨立部署方式，不會安裝完整維護指令集或 Home Assistant。
+
 ```text
 iPhone Home Assistant App
            │
@@ -305,6 +307,9 @@ systemctl status mosquitto
 systemctl status vps-monitor
 journalctl -u vps-monitor -f
 
-# 使用本專案的備份與回退機制更新 Home Assistant
-sudo vps-sentinel-update
+# 更新 VPS Sentinel 本身
+sudo vps-sentinel upgrade
+
+# 使用備份與回退機制更新 Home Assistant
+sudo vps-sentinel ha-update
 ```

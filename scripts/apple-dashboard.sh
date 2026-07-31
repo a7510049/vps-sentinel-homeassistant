@@ -90,7 +90,7 @@ show_resource_steps() {
   類型：JavaScript 模組
 
 完成後執行：
-  sudo vps-sentinel-apple --apply
+  sudo vps-sentinel apple --apply
 
 這是 Home Assistant 官方支援且最穩定的註冊方式。
 程式不會直接修改 .storage。
@@ -218,8 +218,12 @@ YAML
 
 remove_legacy_auto_module
 install_asset
-if [[ "${1:-}" == "--apply" ]]; then
-  apply_dashboard
-else
-  show_resource_steps
-fi
+case "${1:-}" in
+  --apply) apply_dashboard ;;
+  "") show_resource_steps ;;
+  *)
+    echo "[錯誤] 未知參數：${1}" >&2
+    echo "用法：sudo vps-sentinel apple [--apply]" >&2
+    exit 2
+    ;;
+esac
