@@ -101,6 +101,15 @@ require_integer() {
   fi
 }
 
+require_percent() {
+  local label="$1" value="$2"
+  require_number "${label}" "${value}"
+  if ! awk -v value="${value}" 'BEGIN { exit !(value >= 1 && value <= 100) }'; then
+    error "${label} 必須介於 1 到 100，目前值為：${value}"
+    exit 1
+  fi
+}
+
 env_value() {
   local value="$1"
   if [[ "${value}" == *$'\n'* || "${value}" == *$'\r'* ]]; then
@@ -211,9 +220,9 @@ if [[ "${configure}" == "true" ]]; then
 
   require_integer "MQTT 連接埠" "${mqtt_port}"
   require_integer "回報間隔" "${interval}"
-  require_number "CPU 門檻" "${cpu_warn}"
-  require_number "記憶體門檻" "${memory_warn}"
-  require_number "磁碟門檻" "${disk_warn}"
+  require_percent "CPU 門檻" "${cpu_warn}"
+  require_percent "記憶體門檻" "${memory_warn}"
+  require_percent "磁碟門檻" "${disk_warn}"
   require_integer "連續超標次數" "${overload_samples}"
   if (( interval < 10 )); then
     error "回報間隔不可低於 10 秒。"
@@ -222,7 +231,7 @@ if [[ "${configure}" == "true" ]]; then
 
   umask 077
   {
-    echo "# 由 VPS HomeKit 中文安裝器產生：$(date --iso-8601=seconds)"
+    echo "# 由 VPS Sentinel 中文安裝器產生：$(date --iso-8601=seconds)"
     printf 'MQTT_HOST=%s\n' "$(env_value "${mqtt_host}")"
     printf 'MQTT_PORT=%s\n' "$(env_value "${mqtt_port}")"
     printf 'MQTT_USERNAME=%s\n' "$(env_value "${mqtt_username}")"

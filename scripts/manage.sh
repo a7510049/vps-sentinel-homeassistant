@@ -124,11 +124,12 @@ pause_menu() {
 
 run_tool() {
   local label="$1" command="$2"
+  shift 2
   if [[ ! -x "${command}" ]]; then
     yellow "找不到${label}，請先執行 VPS Sentinel 更新。"
     return 1
   fi
-  if ! "${command}"; then
+  if ! "${command}" "$@"; then
     red "${label}未完成，請查看上方訊息。"
     return 1
   fi
@@ -630,7 +631,7 @@ print_help() {
   status       查看服務狀態
   settings     查看目前監控設定
   dashboard    建立或更新 Home Assistant 監控面板
-  apple        設定 Apple 風格面板
+  apple        設定 Apple 風格面板；加上 --apply 套用面板
   doctor       執行健康檢查
   backup       開啟備份與還原工具
   upgrade      更新 VPS Sentinel
@@ -640,18 +641,20 @@ HELP
 }
 
 run_command() {
-  case "${1}" in
+  local command="$1"
+  shift
+  case "${command}" in
     status) show_status ;;
     settings) show_settings ;;
     dashboard) install_dashboard ;;
-    apple) run_tool "Apple 風格面板" "${APPLE_COMMAND}" ;;
+    apple) run_tool "Apple 風格面板" "${APPLE_COMMAND}" "$@" ;;
     doctor) run_tool "健康檢查" "${DOCTOR_COMMAND}" ;;
     backup) run_tool "備份管理" "${BACKUP_COMMAND}" ;;
     upgrade) run_tool "VPS Sentinel 更新" "${UPGRADE_COMMAND}" ;;
     ha-update) run_tool "Home Assistant 更新" "${UPDATE_COMMAND}" ;;
     help|-h|--help) print_help ;;
     *)
-      red "未知指令：${1}"
+      red "未知指令：${command}"
       print_help
       return 2
       ;;
@@ -690,7 +693,7 @@ main_menu() {
 }
 
 if (( $# > 0 )); then
-  run_command "$1"
+  run_command "$@"
 else
   main_menu
 fi

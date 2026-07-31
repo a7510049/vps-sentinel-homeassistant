@@ -131,6 +131,12 @@ sudo bash setup.sh
 sudo vps-sentinel apple
 ```
 
+第一次執行會安裝前端元件，並顯示 Home Assistant 資源註冊方式。完成資源註冊後，再套用面板：
+
+```bash
+sudo vps-sentinel apple --apply
+```
+
 完整安裝說明請參考：
 
 📖 [MQTT 與 Home Assistant 完整安裝教學](docs/mqtt-vps-setup.md)
@@ -147,7 +153,8 @@ sudo vps-sentinel apple
 | 查看目前狀態 | `sudo vps-sentinel status` |
 | 查看監控設定 | `sudo vps-sentinel settings` |
 | 重新建立儀表板 | `sudo vps-sentinel dashboard` |
-| 套用 Apple 風格面板 | `sudo vps-sentinel apple` |
+| 安裝 Apple 面板元件／查看設定步驟 | `sudo vps-sentinel apple` |
+| 套用 Apple 風格面板 | `sudo vps-sentinel apple --apply` |
 | 健康檢查與修復 | `sudo vps-sentinel doctor` |
 | 建立或還原備份 | `sudo vps-sentinel backup` |
 | 更新 VPS Sentinel | `sudo vps-sentinel upgrade` |
@@ -215,6 +222,14 @@ sudo vps-sentinel
 ```text
 .
 ├── setup.sh                         # 一條龍安裝入口
+├── manage.sh -> scripts/manage.sh   # 舊版升級相容連結
+├── update.sh -> scripts/update.sh
+├── upgrade.sh -> scripts/upgrade.sh
+├── uninstall.sh -> scripts/uninstall.sh
+├── doctor.sh -> scripts/doctor.sh
+├── backup.sh -> scripts/backup.sh
+├── automations.sh -> scripts/automations.sh
+├── apple-dashboard.sh -> scripts/apple-dashboard.sh
 ├── scripts/                         # 維護、更新、備份與移除工具
 │   ├── manage.sh                    # 繁體中文維護中心與指令集
 │   ├── doctor.sh                    # 健康檢查與修復
@@ -241,6 +256,8 @@ sudo vps-sentinel
 ├── VERSION                          # 專案版本
 └── CHANGELOG.md                     # 完整更新紀錄
 ```
+
+根目錄的八個腳本是指向 `scripts/` 的相容連結，讓仍使用 0.9.6 升級器的既有安裝能順利跨越目錄調整；新安裝與日常操作不需要直接使用這些連結。
 
 ---
 
