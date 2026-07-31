@@ -31,6 +31,21 @@ jobs:
           PY
           python3 tools/finalize_098.py
 
+      - name: Remove obsolete generated password variables
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("setup.sh")
+          lines = path.read_text(encoding="utf-8").splitlines()
+          lines = [
+              line for line in lines
+              if "generated_ha_password" not in line
+              and "generated_monitor_password" not in line
+          ]
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
       - name: Check shell syntax
         run: bash -n setup.sh scripts/*.sh vps-monitor/install.sh
 
