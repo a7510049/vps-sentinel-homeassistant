@@ -1,8 +1,8 @@
 name: Finish structure migration
 
 on:
-  issue_comment:
-    types: [created]
+  pull_request_target:
+    types: [synchronize]
 
 permissions:
   contents: write
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   migrate:
-    if: github.event.issue.pull_request && github.event.issue.number == 33 && github.event.comment.body == '/finish-structure-migration'
+    if: github.event.pull_request.number == 33
     runs-on: ubuntu-latest
     steps:
       - name: Check out PR branch
@@ -40,8 +40,6 @@ jobs:
           for path in Path(".").rglob("*"):
               if not path.is_file() or ".git" in path.parts:
                   continue
-              if path == Path(".github/workflows/finish-structure-migration.yml"):
-                  continue
               if path.suffix not in {".sh", ".py", ".yml", ".yaml", ".md"}:
                   continue
               try:
@@ -53,8 +51,6 @@ jobs:
                   updated = updated.replace(old, new)
               if updated != original:
                   path.write_text(updated, encoding="utf-8")
-
-          Path(".github/workflows/finish-structure-migration.yml").unlink(missing_ok=True)
 
       - name: Validate migrated repository
         run: |
