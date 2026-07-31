@@ -76,7 +76,7 @@ jobs:
           tests/test_release_integrity.py
 
       - name: Check whitespace errors
-        run: git diff --check
+        run: git diff --check HEAD^ HEAD
 
       - name: Publish GitHub Release
         env:
