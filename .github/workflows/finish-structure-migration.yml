@@ -22,19 +22,16 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-
           names = [
               'apple-dashboard.sh', 'automations.sh', 'backup.sh', 'doctor.sh',
               'manage.sh', 'uninstall.sh', 'update.sh', 'upgrade.sh',
           ]
-
           replacements = {}
           for name in names:
               replacements[f'${{REPO_DIR}}/{name}'] = f'${{REPO_DIR}}/scripts/{name}'
               replacements[f'${{source_dir}}/{name}'] = f'${{source_dir}}/scripts/{name}'
               replacements[f'ROOT / "{name}"'] = f'ROOT / "scripts" / "{name}"'
               replacements[f'ROOT / \'{name}\''] = f'ROOT / "scripts" / \'{name}\''
-
           for path in Path('.').rglob('*'):
               if not path.is_file() or '.git' in path.parts:
                   continue
@@ -62,9 +59,10 @@ jobs:
           python3 -m unittest discover -s tests -v
           python3 -m py_compile vps-monitor/vps_monitor.py tests/test_vps_monitor.py tests/test_command_interface.py
           git diff --check
-          grep -R --line-number --exclude-dir=.git --exclude=finish-structure-migration.yml \
-            -E '\$\{REPO_DIR\}/(apple-dashboard|automations|backup|doctor|manage|uninstall|update|upgrade)\.sh|\$\{source_dir\}/(apple-dashboard|automations|backup|doctor|manage|uninstall|update|upgrade)\.sh' \
-            . && exit 1 || true
+          if grep -R --line-number --exclude-dir=.git --exclude=finish-structure-migration.yml \
+            -E '\$\{REPO_DIR\}/(apple-dashboard|automations|backup|doctor|manage|uninstall|update|upgrade)\.sh|\$\{source_dir\}/(apple-dashboard|automations|backup|doctor|manage|uninstall|update|upgrade)\.sh' .; then
+            exit 1
+          fi
 
       - name: Commit migration fixes
         shell: bash
@@ -76,4 +74,4 @@ jobs:
           git commit -m "fix: update references for scripts directory"
           git push origin HEAD:chore/reorganize-project-structure-v2
 
-# Triggered after the workflow was present on the branch.
+# Registered on main; this push triggers the migration.
