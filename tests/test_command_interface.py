@@ -31,7 +31,7 @@ UNINSTALL = (SCRIPTS / "uninstall.sh").read_text(encoding="utf-8")
 
 class CommandInterfaceTests(unittest.TestCase):
     def test_release_version_is_0_9(self):
-        self.assertEqual(VERSION, "0.9.6")
+        self.assertEqual(VERSION, "0.9.7")
 
     def test_apple_dashboard_preserves_storage_and_native_fallback(self):
         self.assertEqual(APPLE_DASHBOARD.count(".storage"), 1)
@@ -39,7 +39,7 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn("--apply", APPLE_DASHBOARD)
         self.assertIn("新增一筆儀表板資源", APPLE_DASHBOARD)
         self.assertIn(
-            'RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.9.6"',
+            'RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.9.7"',
             APPLE_DASHBOARD,
         )
         self.assertIn("remove_legacy_auto_module", APPLE_DASHBOARD)
