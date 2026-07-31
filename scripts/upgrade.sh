@@ -5,6 +5,7 @@ readonly REPOSITORY="a7510049/vps-sentinel-homeassistant"
 readonly INSTALL_DIR="/opt/vps-monitor"
 readonly BACKUP_ROOT="/opt/vps-monitor-backups"
 readonly SERVICE_FILE="/etc/systemd/system/vps-monitor.service"
+readonly CARD_TARGET="/opt/homeassistant/config/www/vps-sentinel-apple-card.js"
 readonly MANAGE_COMMAND="/usr/local/sbin/vps-sentinel"
 readonly UPDATE_COMMAND="/usr/local/sbin/vps-sentinel-update"
 readonly UNINSTALL_COMMAND="/usr/local/sbin/vps-sentinel-uninstall"
@@ -26,11 +27,11 @@ if [[ ! -t 0 ]]; then
   red "升級工具只能在互動式終端機執行。"
   exit 1
 fi
-for command in curl tar python3; do
-  if ! command -v "${command}" >/dev/null 2>&1; then
+for command in curl tar python3 mosquitto_sub timeout; do
+  command -v "${command}" >/dev/null 2>&1 || {
     red "缺少必要指令：${command}"
     exit 1
-  fi
+  }
 done
 available_kb="$(df -Pk /opt | awk 'NR == 2 {print $4}')"
 if [[ "${available_kb:-0}" -lt 204800 ]]; then
@@ -43,6 +44,29 @@ if [[ ! -f /etc/vps-monitor.env ||
   exit 1
 fi
 
+read_env() {
+  local key="$1" value
+  value="$(sed -n "s/^${key}=//p" /etc/vps-monitor.env | tail -n 1)"
+  value="${value#\"}"
+  value="${value%\"}"
+  printf '%s' "${value}"
+}
+
+mqtt_probe() {
+  local host port username password vps_id
+  host="$(read_env MQTT_HOST)"
+  port="$(read_env MQTT_PORT)"
+  username="$(read_env MQTT_USERNAME)"
+  password="$(read_env MQTT_PASSWORD)"
+  vps_id="$(read_env VPS_ID)"
+  [[ -n "${host}" && -n "${username}" && -n "${vps_id}" ]] || return 1
+  timeout 15 mosquitto_sub \
+    -h "${host}" -p "${port:-1883}" \
+    -u "${username}" -P "${password}" \
+    -t "vps/${vps_id}/online" -C 1 2>/dev/null |
+    grep -qx 'ON'
+}
+
 printf '\033[1;35m'
 cat <<'BANNER'
 ╭────────────────────────────────────────╮
@@ -50,7 +74,7 @@ cat <<'BANNER'
 ╰────────────────────────────────────────╯
 BANNER
 printf '\033[0m'
-echo "更新前會檢查版本與檔案，服務異常時自動回復。"
+echo "更新前會檢查版本與檔案，服務或 MQTT 驗證失敗時自動回復。"
 echo
 
 temporary="$(mktemp -d)"
@@ -102,26 +126,25 @@ for file in VERSION scripts/manage.sh scripts/update.sh scripts/uninstall.sh \
   home-assistant/blueprints/offline-notification.yaml \
   home-assistant/blueprints/daily-summary.yaml \
   home-assistant/www/vps-sentinel-apple-card.js; do
-  if [[ ! -f "${source_dir}/${file}" ]]; then
+  [[ -f "${source_dir}/${file}" ]] || {
     red "下載內容缺少 ${file}，已取消升級。"
     exit 1
-  fi
+  }
 done
 downloaded_version="$(tr -d '[:space:]' < "${source_dir}/VERSION")"
 if [[ "${downloaded_version}" != "${latest_version}" ]]; then
   red "版本檔與 Release 標籤不一致，已取消升級。"
   exit 1
 fi
-bash -n "${source_dir}/scripts/manage.sh" \
-  "${source_dir}/scripts/update.sh" \
-  "${source_dir}/scripts/uninstall.sh" \
-  "${source_dir}/scripts/upgrade.sh" \
-  "${source_dir}/scripts/doctor.sh" \
-  "${source_dir}/scripts/backup.sh" \
-  "${source_dir}/scripts/automations.sh" \
-  "${source_dir}/scripts/apple-dashboard.sh"
+card_version="$(sed -n 's/^const CARD_VERSION = "\([^"]*\)";.*/\1/p' \
+  "${source_dir}/home-assistant/www/vps-sentinel-apple-card.js" | head -n 1)"
+if [[ "${card_version}" != "${latest_version}" ]]; then
+  red "Apple 卡片版本 ${card_version:-未知} 與 Release 不一致。"
+  exit 1
+fi
+bash -n "${source_dir}/scripts/"*.sh
 python3 -m py_compile "${source_dir}/vps-monitor/vps_monitor.py"
-green "下載內容與基本語法檢查完成"
+green "下載內容、版本與基本語法檢查完成"
 
 timestamp="$(date +%Y%m%d-%H%M%S)"
 backup="${BACKUP_ROOT}/${timestamp}"
@@ -132,6 +155,9 @@ cp -a "${INSTALL_DIR}/.requirements.sha256" "${backup}/" 2>/dev/null || true
 cp -a "${INSTALL_DIR}/.version" "${backup}/" 2>/dev/null || true
 cp -a "${INSTALL_DIR}/vps-sentinel-apple-card.js" \
   "${backup}/" 2>/dev/null || true
+if [[ -f "${CARD_TARGET}" ]]; then
+  cp -a "${CARD_TARGET}" "${backup}/homeassistant-card.js"
+fi
 cp -a "${SERVICE_FILE}" "${backup}/vps-monitor.service" 2>/dev/null || true
 for file in "${MANAGE_COMMAND}" "${UPDATE_COMMAND}" \
   "${UNINSTALL_COMMAND}" "${UPGRADE_COMMAND}" "${DOCTOR_COMMAND}" \
@@ -144,7 +170,7 @@ green "舊版本已備份：${backup}"
 
 rollback() {
   trap - ERR
-  red "新版本未能正常啟動，正在回復 ${current_version}。"
+  red "新版本未能通過完整驗證，正在回復 ${current_version}。"
   install -m 0755 "${backup}/vps_monitor.py" \
     "${INSTALL_DIR}/vps_monitor.py"
   install -m 0644 "${backup}/requirements.txt" \
@@ -157,19 +183,18 @@ rollback() {
   if [[ -f "${backup}/vps-sentinel-apple-card.js" ]]; then
     install -m 0644 "${backup}/vps-sentinel-apple-card.js" \
       "${INSTALL_DIR}/vps-sentinel-apple-card.js"
-  else
-    rm -f -- "${INSTALL_DIR}/vps-sentinel-apple-card.js"
+  fi
+  if [[ -f "${backup}/homeassistant-card.js" ]]; then
+    install -d -m 0755 "$(dirname "${CARD_TARGET}")"
+    install -m 0644 "${backup}/homeassistant-card.js" "${CARD_TARGET}"
   fi
   [[ ! -f "${backup}/vps-monitor.service" ]] ||
     install -m 0644 "${backup}/vps-monitor.service" "${SERVICE_FILE}"
   for name in vps-sentinel vps-sentinel-update vps-sentinel-uninstall \
     vps-sentinel-upgrade vps-sentinel-doctor vps-sentinel-backup \
     vps-sentinel-automations vps-sentinel-apple; do
-    if [[ -f "${backup}/${name}" ]]; then
+    [[ ! -f "${backup}/${name}" ]] ||
       install -m 0755 "${backup}/${name}" "/usr/local/sbin/${name}"
-    else
-      rm -f -- "/usr/local/sbin/${name}"
-    fi
   done
   rm -rf -- "${INSTALL_DIR}/blueprints"
   [[ ! -d "${backup}/blueprints" ]] ||
@@ -221,20 +246,20 @@ install -m 0755 "${source_dir}/scripts/apple-dashboard.sh" "${APPLE_COMMAND}"
 install -m 0644 \
   "${source_dir}/home-assistant/www/vps-sentinel-apple-card.js" \
   "${INSTALL_DIR}/vps-sentinel-apple-card.js"
+if [[ -f "${CARD_TARGET}" ]]; then
+  install -d -m 0755 "$(dirname "${CARD_TARGET}")"
+  install -m 0644 "${INSTALL_DIR}/vps-sentinel-apple-card.js" \
+    "${CARD_TARGET}"
+fi
 install -d -m 0755 "${INSTALL_DIR}/blueprints"
 install -m 0644 "${source_dir}"/home-assistant/blueprints/*.yaml \
   "${INSTALL_DIR}/blueprints/"
 printf '%s\n' "${latest_version}" > "${INSTALL_DIR}/.version"
 systemctl daemon-reload
-if ! systemctl restart vps-monitor; then
-  rollback
-  exit 1
-fi
-sleep 3
-if ! systemctl is-active --quiet vps-monitor; then
-  rollback
-  exit 1
-fi
+systemctl restart vps-monitor
+sleep 5
+systemctl is-active --quiet vps-monitor
+mqtt_probe
 upgrade_started=false
 trap - ERR
 
@@ -254,6 +279,10 @@ for old_backup in "${old_backups[@]}"; do
   esac
 done
 green "VPS Sentinel 已安全升級至 ${latest_version}"
+green "監控服務、MQTT 認證與在線資料均已驗證"
+if [[ -f "${CARD_TARGET}" ]]; then
+  green "Apple 卡片前端檔案已同步，不需要重新啟動 Home Assistant"
+fi
 if [[ "${cleanup_ok}" == "true" ]]; then
   green "舊版暫存已清理，僅保留最近一份回復備份"
 else
