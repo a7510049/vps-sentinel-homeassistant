@@ -6,6 +6,38 @@
 
 ---
 
+## 0.9.8 — 1.0 前的穩定性收尾
+
+這個版本不擴張功能，而是把安裝、升級、備份、還原與診斷流程補到可以放心交給日常使用的程度。
+
+### 修正
+
+- 維護操作的完成、失敗、冷卻與拒絕通知改為一次性事件，重新整理後不再重播舊訊息。
+- Apple 卡片版本、安裝版本與資源快取參數使用同一個版本來源，並修正一處多餘的 CSS 大括號。
+- 單純同步 Apple 前端檔案時不再重啟 Home Assistant，避免正在進行的設定流程失效。
+- 安裝器、升級器與 Doctor 會實際驗證 VPS Monitor 的 MQTT 帳密、連線紀錄及在線資料，不再只看 systemd 服務狀態。
+- 重新執行安裝器時會優先沿用並同步既有 VPS Monitor MQTT 密碼，避免 Mosquitto 與環境檔不一致。
+- 備份與還原正式支援 `compose.yaml`，並相容舊版 `docker-compose.yml`。
+- 設定備份加入 Mosquitto 設定與密碼檔；還原後會驗證 Home Assistant、MQTT 與監控資料。
+- Tailscale Serve 使用的反向代理設定預設包含 `use_x_forwarded_for` 與本機 trusted proxies，降低 400 Bad Request 的機率。
+
+### 可靠性
+
+- 升級後會驗證前端卡片版本及 MQTT 實際資料；失敗時一併回復程式、服務、版本與前端檔案。
+- Doctor 新增 MQTT 密碼同步、Apple 卡片同步、Tailscale Serve／代理檢查與 Home Assistant IP 封鎖清除。
+- GitHub Release 發布前會重新執行 ShellCheck、JavaScript、YAML、Python 測試與版本一致性檢查。
+
+## 0.9.7 — 整理專案結構與正式發布流程
+
+這個版本完成維護腳本目錄整理，並補齊從舊版升級到新結構時需要的相容性。
+
+### 改善
+
+- 維護腳本統一放入 `scripts/`，移除根目錄的重複相容連結。
+- 修正升級器對搬移後腳本路徑的檢查、安裝與回復流程。
+- 統一 `vps-sentinel` 指令的參數轉交與文件範例。
+- 建立由 `VERSION` 觸發的 GitHub Release 發布流程。
+
 ## 0.9.6 — 讓 iPhone 上最後一點突兀也消失
 
 這個小版本專注在觸控後的視覺收尾，讓卡片被點開之後，不會留下像是鍵盤操作才會出現的焦點外框。

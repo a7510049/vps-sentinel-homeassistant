@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.9.6";
+const CARD_VERSION = "0.9.8";
 
 class VpsSentinelAppleCard extends HTMLElement {
   setConfig(config) {
@@ -262,7 +262,6 @@ class VpsSentinelAppleCard extends HTMLElement {
           will-change: transform;
           -webkit-tap-highlight-color: transparent;
           touch-action: manipulation;
-        }
         }
         .insight-label {
           margin-bottom: 5px;
