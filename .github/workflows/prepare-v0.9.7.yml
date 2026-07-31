@@ -1,9 +1,9 @@
 name: Prepare v0.9.7
 
 on:
-  push:
+  pull_request:
     branches:
-      - release/v0.9.7
+      - main
 
 permissions:
   contents: write
