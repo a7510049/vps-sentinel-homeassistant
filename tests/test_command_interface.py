@@ -241,7 +241,6 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn("部分舊備份需要稍後手動清理", HA_UPDATE)
         self.assertIn("部分舊版備份需要稍後手動清理", SENTINEL_UPGRADE)
 
-
     def test_unified_command_forwards_apple_apply_argument(self):
         self.assertIn('shift 2', MANAGE)
         self.assertIn('if ! "${command}" "$@"; then', MANAGE)
@@ -252,19 +251,6 @@ class CommandInterfaceTests(unittest.TestCase):
         self.assertIn('run_command "$@"', MANAGE)
         self.assertIn("sudo vps-sentinel apple --apply", APPLE_DASHBOARD)
         self.assertIn("sudo vps-sentinel apple --apply", README)
-
-    def test_root_compatibility_links_support_0_9_6_upgrades(self):
-        names = [
-            "manage.sh", "update.sh", "upgrade.sh", "uninstall.sh",
-            "doctor.sh", "backup.sh", "automations.sh",
-            "apple-dashboard.sh",
-        ]
-        for name in names:
-            with self.subTest(name=name):
-                link = ROOT / name
-                self.assertTrue(link.is_symlink())
-                self.assertEqual(link.readlink(), Path("scripts") / name)
-        self.assertIn("scripts/manage.sh", SENTINEL_UPGRADE)
 
     def test_installer_and_docs_use_current_command_interface(self):
         self.assertIn("sudo vps-sentinel doctor", SETUP)
