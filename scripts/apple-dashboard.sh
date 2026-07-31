@@ -79,7 +79,8 @@ show_resource_steps() {
   url="$(resource_url)"
   cat <<EOF
 
-請確認 Home Assistant 儀表板資源只有一筆：
+首次使用請在 Home Assistant 新增一筆儀表板資源；
+更新既有版本時，請確認包含 Apple 卡片的資源只有一筆：
   網址：${url}
   類型：JavaScript 模組
 
