@@ -1,0 +1,56 @@
+name: Finalize 0.9.8 preparation
+
+on:
+  push:
+    branches:
+      - release/0.9.8-stability
+    paths:
+      - .github/workflows/finalize-098.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: release/0.9.8-stability
+          fetch-depth: 0
+
+      - name: Apply final stability changes
+        run: python3 tools/finalize_098.py
+
+      - name: Check shell syntax
+        run: bash -n setup.sh scripts/*.sh vps-monitor/install.sh
+
+      - name: Run ShellCheck
+        run: shellcheck setup.sh scripts/*.sh vps-monitor/install.sh
+
+      - name: Check Apple card syntax
+        run: node --check home-assistant/www/vps-sentinel-apple-card.js
+
+      - name: Check YAML syntax
+        run: |
+          ruby -e "require 'yaml'; YAML.parse_file('.github/workflows/validate.yml'); YAML.parse_file('.github/workflows/release.yml')"
+          ruby -e "require 'yaml'; Dir['home-assistant/blueprints/*.yaml'].each { |file| YAML.parse_file(file) }"
+
+      - name: Install Python dependencies
+        run: python3 -m pip install -r vps-monitor/requirements.txt
+
+      - name: Run Python tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Remove temporary finalizer
+        run: rm -f tools/finalize_098.py .github/workflows/finalize-098.yml
+
+      - name: Commit finalized 0.9.8 preparation
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "release: finalize VPS Sentinel 0.9.8 stability"
+          git push origin HEAD:release/0.9.8-stability
