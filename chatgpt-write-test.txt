@@ -1,0 +1,6 @@
+ChatGPT GitHub write test successful.
+
+Created: 2026-07-31 17:29 Asia/Taipei
+Purpose: Verify that the connected GitHub integration has repository write access.
+
+This file can be safely deleted after verification.
