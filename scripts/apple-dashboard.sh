@@ -7,7 +7,7 @@ readonly HA_CONFIG="${HA_DIR}/config/configuration.yaml"
 readonly DASHBOARD_FILE="${HA_DIR}/config/vps-sentinel-dashboard.yaml"
 readonly CARD_SOURCE="/opt/vps-monitor/vps-sentinel-apple-card.js"
 readonly CARD_TARGET="${HA_DIR}/config/www/vps-sentinel-apple-card.js"
-readonly RESOURCE_URL="/local/vps-sentinel-apple-card.js?v=0.9.7"
+readonly VERSION_FILE="/opt/vps-monitor/.version"
 
 if [[ ${EUID} -ne 0 ]]; then
   echo "[錯誤] 請使用 sudo：sudo vps-sentinel-apple" >&2
@@ -28,6 +28,19 @@ read_env() {
   printf '%s' "${value}"
 }
 
+installed_version() {
+  local version
+  version="$(tr -d '[:space:]' < "${VERSION_FILE}" 2>/dev/null || true)"
+  if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    version="0.9.8"
+  fi
+  printf '%s' "${version}"
+}
+
+resource_url() {
+  printf '/local/vps-sentinel-apple-card.js?v=%s' "$(installed_version)"
+}
+
 yaml_id() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]' |
     sed 's/[^a-z0-9_]/_/g'
@@ -46,54 +59,35 @@ wait_for_home_assistant() {
 }
 
 install_asset() {
-  local changed=false card_backup=""
+  local changed=false
   install -d -m 0755 "$(dirname "${CARD_TARGET}")"
   if [[ ! -f "${CARD_TARGET}" ]] ||
      ! cmp -s "${CARD_SOURCE}" "${CARD_TARGET}"; then
-    if [[ -f "${CARD_TARGET}" ]]; then
-      card_backup="$(mktemp)"
-      cp -a "${CARD_TARGET}" "${card_backup}"
-    fi
     install -m 0644 "${CARD_SOURCE}" "${CARD_TARGET}"
     changed=true
   fi
   if [[ "${changed}" == "true" ]]; then
-    (
-      cd "${HA_DIR}"
-      docker compose restart homeassistant
-    )
-    if ! wait_for_home_assistant; then
-      if [[ -n "${card_backup}" ]]; then
-        install -m 0644 "${card_backup}" "${CARD_TARGET}"
-      else
-        rm -f -- "${CARD_TARGET}"
-      fi
-      (
-        cd "${HA_DIR}"
-        docker compose restart homeassistant
-      ) || true
-      echo "[錯誤] Home Assistant 未能在預期時間內恢復。" >&2
-      exit 1
-    fi
-    [[ -z "${card_backup}" ]] || rm -f -- "${card_backup}"
-    echo "[完成] Apple 風格面板元件已安裝。"
+    echo "[完成] Apple 風格面板元件已同步。"
+    echo "[提示] 前端檔案更新不需要重新啟動 Home Assistant。"
   else
     echo "[完成] Apple 風格面板元件已是最新版本。"
   fi
 }
 
 show_resource_steps() {
+  local url
+  url="$(resource_url)"
   cat <<EOF
 
-首次使用請在 Home Assistant 新增一筆儀表板資源：
-  網址：${RESOURCE_URL}
+請確認 Home Assistant 儀表板資源只有一筆：
+  網址：${url}
   類型：JavaScript 模組
 
-完成後執行：
+首次使用完成資源註冊後執行：
   sudo vps-sentinel apple --apply
 
-這是 Home Assistant 官方支援且最穩定的註冊方式。
-程式不會直接修改 .storage。
+更新既有版本時，請把原本資源網址的版本參數改成上方網址，
+再重新整理 Home Assistant App；不需要重新啟動 Home Assistant。
 EOF
 }
 
@@ -179,6 +173,7 @@ views:
         provider: sensor.${vps_id}_provider
         osName: sensor.${vps_id}_os_name
         maintenance: sensor.${vps_id}_maintenance_status
+        maintenanceEvent: event.${vps_id}_maintenance_event
         commandTopic: vps/$(read_env VPS_ID)/command
 YAML
 
