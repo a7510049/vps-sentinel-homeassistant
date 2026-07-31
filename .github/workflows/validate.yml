@@ -23,26 +23,16 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-
-          names = [
-              'apple-dashboard.sh', 'automations.sh', 'backup.sh', 'doctor.sh',
-              'manage.sh', 'uninstall.sh', 'update.sh', 'upgrade.sh',
-          ]
+          names = ['apple-dashboard.sh', 'automations.sh', 'backup.sh', 'doctor.sh', 'manage.sh', 'uninstall.sh', 'update.sh', 'upgrade.sh']
           replacements = {}
           for name in names:
               replacements[f'${{REPO_DIR}}/{name}'] = f'${{REPO_DIR}}/scripts/{name}'
               replacements[f'${{source_dir}}/{name}'] = f'${{source_dir}}/scripts/{name}'
               replacements[f'ROOT / "{name}"'] = f'ROOT / "scripts" / "{name}"'
               replacements[f'ROOT / \'{name}\''] = f'ROOT / "scripts" / \'{name}\''
-
-          excluded = {
-              Path('.github/workflows/validate.yml'),
-              Path('.github/workflows/finish-structure-migration.yml'),
-          }
+          excluded = {Path('.github/workflows/validate.yml'), Path('.github/workflows/finish-structure-migration.yml')}
           for path in Path('.').rglob('*'):
-              if not path.is_file() or '.git' in path.parts or path in excluded:
-                  continue
-              if path.suffix not in {'.sh', '.py', '.yml', '.yaml', '.md'}:
+              if not path.is_file() or '.git' in path.parts or path in excluded or path.suffix not in {'.sh', '.py', '.yml', '.yaml', '.md'}:
                   continue
               try:
                   original = path.read_text(encoding='utf-8')
@@ -56,50 +46,28 @@ jobs:
 
       - name: Check shell syntax
         run: bash -n setup.sh scripts/*.sh vps-monitor/install.sh
-
       - name: Run ShellCheck
         run: shellcheck setup.sh scripts/*.sh vps-monitor/install.sh
-
       - name: Check Apple card syntax
         run: node --check home-assistant/www/vps-sentinel-apple-card.js
-
       - name: Check Blueprint YAML syntax
         run: ruby -e "require 'yaml'; Dir['home-assistant/blueprints/*.yaml'].each { |file| YAML.parse_file(file) }"
-
       - name: Check dashboard YAML syntax
         run: >-
-          ruby -e 'require "yaml";
-          source = File.read("scripts/manage.sh");
-          dashboard = source.match(/cat > "\$\{DASHBOARD_FILE\}" <<YAML\n(.*?)\nYAML/m).captures.first;
-          YAML.parse(dashboard.gsub("${vps_id}", "demo"))'
-
+          ruby -e 'require "yaml"; source = File.read("scripts/manage.sh"); dashboard = source.match(/cat > "\$\{DASHBOARD_FILE\}" <<YAML\n(.*?)\nYAML/m).captures.first; YAML.parse(dashboard.gsub("${vps_id}", "demo"))'
       - name: Install Python dependencies
         run: python3 -m pip install -r vps-monitor/requirements.txt
-
       - name: Run Python tests
         run: python3 -m unittest discover -s tests -v
-
       - name: Check Python syntax
-        run: >-
-          python3 -m py_compile
-          vps-monitor/vps_monitor.py
-          tests/test_vps_monitor.py
-          tests/test_command_interface.py
-
+        run: python3 -m py_compile vps-monitor/vps_monitor.py tests/test_vps_monitor.py tests/test_command_interface.py
       - name: Verify moved path references
         run: |
-          if grep -R --line-number --exclude-dir=.git \
-            --exclude=validate.yml --exclude=finish-structure-migration.yml \
-            -E '\$\{REPO_DIR\}/(apple-dashboard|automations|backup|doctor|manage|uninstall|update|upgrade)\.sh|\$\{source_dir\}/(apple-dashboard|automations|backup|doctor|manage|uninstall|update|upgrade)\.sh' .; then
-            exit 1
-          fi
-
+          if grep -R --line-number --exclude-dir=.git --exclude=validate.yml --exclude=finish-structure-migration.yml -E '\$\{REPO_DIR\}/(apple-dashboard|automations|backup|doctor|manage|uninstall|update|upgrade)\.sh|\$\{source_dir\}/(apple-dashboard|automations|backup|doctor|manage|uninstall|update|upgrade)\.sh' .; then exit 1; fi
       - name: Commit migration fixes
         if: github.event_name == 'pull_request' && github.head_ref == 'chore/reorganize-project-structure-v2' && github.actor != 'github-actions[bot]'
         run: |
-          if git diff --quiet; then
-            exit 0
-          fi
+          if git diff --quiet; then exit 0; fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
