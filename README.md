@@ -162,6 +162,38 @@ sudo vps-sentinel-apple --apply
 - 🛠️ **Shell 維護工具**：安裝、更新、備份、診斷與移除
 - 🔒 **Tailscale**：提供私有、安全的遠端存取方式
 
+### 📁 檔案樹
+
+```text
+.
+├── setup.sh                         # 一條龍安裝入口
+├── scripts/                         # 維護、更新、備份與移除工具
+│   ├── manage.sh                    # 繁體中文維護中心
+│   ├── doctor.sh                    # 健康檢查與修復
+│   ├── backup.sh                    # 設定備份與還原
+│   ├── automations.sh               # Home Assistant 自動化藍圖管理
+│   ├── apple-dashboard.sh           # Apple 風格儀表板安裝器
+│   ├── update.sh                    # Home Assistant 更新工具
+│   ├── upgrade.sh                   # VPS Sentinel 升級工具
+│   └── uninstall.sh                 # 安全移除工具
+├── vps-monitor/                     # VPS 狀態收集與 MQTT 發布服務
+│   ├── vps_monitor.py
+│   ├── vps-monitor.service
+│   ├── requirements.txt
+│   └── install.sh
+├── home-assistant/                  # Home Assistant 前端與自動化資源
+│   ├── blueprints/
+│   └── www/
+│       └── vps-sentinel-apple-card.js
+├── docs/                            # 安裝與使用說明
+│   └── mqtt-vps-setup.md
+├── tests/                           # Python 與指令介面測試
+├── .github/workflows/
+│   └── validate.yml                 # 自動語法、測試與路徑檢查
+├── VERSION                          # 專案版本
+└── CHANGELOG.md                     # 完整更新紀錄
+```
+
 ---
 
 ## 💙 設計理念
