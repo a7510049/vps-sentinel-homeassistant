@@ -667,6 +667,41 @@ class VpsSentinelAppleCard extends HTMLElement {
     return this._hass?.states?.[entityId];
   }
 
+  _maintenanceEventEntityId() {
+    if (this._config.maintenanceEvent) return this._config.maintenanceEvent;
+    const match = /^sensor\.(.+)_maintenance_status$/.exec(
+      this._config.maintenance || "",
+    );
+    return match ? `event.${match[1]}_maintenance_event` : null;
+  }
+
+  _matchingMaintenanceEvent(entity) {
+    const request = this._activeMaintenanceRequest;
+    const attributes = entity?.attributes || {};
+    const eventType = attributes.event_type;
+    const validTypes = new Set([
+      "success", "scheduled", "failed", "cooldown", "busy",
+      "rejected", "disabled",
+    ]);
+    if (
+      !request
+      || attributes.request_id !== request.requestId
+      || !validTypes.has(eventType)
+    ) return null;
+    const updatedAt = attributes.updated_at || entity.last_changed;
+    const key = `${eventType}:${request.requestId}:${updatedAt || entity.state}`;
+    if (this._dismissedMaintenanceEvent === key) return null;
+    return {
+      state: eventType,
+      action: attributes.action || request.action,
+      message: attributes.message,
+      remainingSeconds: attributes.remaining_seconds,
+      updatedAt,
+      requestId: request.requestId,
+      key,
+    };
+  }
+
   _number(entityId) {
     const value = Number.parseFloat(this._state(entityId)?.state);
     return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : null;
@@ -739,6 +774,9 @@ class VpsSentinelAppleCard extends HTMLElement {
     );
 
     const maintenanceEntity = this._state(this._config.maintenance);
+    const maintenanceEventEntity = this._state(
+      this._maintenanceEventEntityId(),
+    );
     const maintenance = this._nodes.maintenance;
     const maintenanceVisible = Boolean(
       this._config.commandTopic && maintenanceEntity,
@@ -746,32 +784,64 @@ class VpsSentinelAppleCard extends HTMLElement {
     maintenance.classList.toggle("visible", maintenanceVisible);
     if (maintenanceVisible) {
       const backendState = maintenanceEntity.state;
-      const message = maintenanceEntity.attributes?.message;
-      const action = maintenanceEntity.attributes?.action;
-      if (backendState !== "idle") this._localMaintenanceState = null;
+      const backendAttributes = maintenanceEntity.attributes || {};
+      const transientStates = new Set([
+        "success", "scheduled", "failed", "rejected", "cooldown", "busy",
+      ]);
       if (
         this._localMaintenanceState
         && Date.now() > this._localMaintenanceState.expiresAt
-      ) this._localMaintenanceState = null;
+      ) {
+        this._localMaintenanceState = null;
+        this._activeMaintenanceRequest = null;
+      }
+      const matchingEvent = this._matchingMaintenanceEvent(
+        maintenanceEventEntity,
+      );
       const localState = this._localMaintenanceState;
-      const state = backendState === "idle" && localState
-        ? localState.state
-        : backendState;
-      const progressMessage = backendState === "idle" && localState
-        ? localState.message
-        : message;
-      const progressAction = backendState === "idle" && localState
-        ? localState.action
-        : action;
-      const cooldownRemaining = backendState === "idle" && localState
-        ? undefined
-        : maintenanceEntity.attributes?.remaining_seconds;
+      let state = "idle";
+      let progressMessage = "";
+      let progressAction = "none";
+      let cooldownRemaining;
+      let updatedAt;
+      let requestId;
+
+      if (backendState === "running") {
+        state = "running";
+        progressMessage = backendAttributes.message;
+        progressAction = backendAttributes.action;
+        updatedAt = backendAttributes.updated_at;
+        requestId = backendAttributes.request_id;
+        if (
+          this._activeMaintenanceRequest
+          && requestId === this._activeMaintenanceRequest.requestId
+        ) this._localMaintenanceState = null;
+      } else if (matchingEvent) {
+        state = matchingEvent.state;
+        progressMessage = matchingEvent.message;
+        progressAction = matchingEvent.action;
+        cooldownRemaining = matchingEvent.remainingSeconds;
+        updatedAt = matchingEvent.updatedAt;
+        requestId = matchingEvent.requestId;
+      } else if (localState) {
+        state = localState.state;
+        progressMessage = localState.message;
+        progressAction = localState.action;
+        requestId = localState.requestId;
+      } else if (!transientStates.has(backendState)) {
+        state = backendState;
+        progressMessage = backendAttributes.message;
+        progressAction = backendAttributes.action;
+        updatedAt = backendAttributes.updated_at;
+      }
+
       const displayState = this._maintenanceDisplayState(
         state,
         progressAction,
-        maintenanceEntity.attributes?.updated_at,
+        updatedAt,
         cooldownRemaining,
         progressMessage,
+        requestId,
       );
       const busy = displayState === "running" || displayState === "sending";
       this._setMaintenanceProgress(
@@ -781,7 +851,7 @@ class VpsSentinelAppleCard extends HTMLElement {
           progressAction,
           progressMessage,
           cooldownRemaining,
-          maintenanceEntity.attributes?.updated_at,
+          updatedAt,
         ),
       );
       for (const button of maintenance.querySelectorAll(".action")) {
@@ -791,12 +861,19 @@ class VpsSentinelAppleCard extends HTMLElement {
     }
   }
 
-  _maintenanceDisplayState(state, action, updatedAt, remainingSeconds, message) {
+  _maintenanceDisplayState(
+    state,
+    action,
+    updatedAt,
+    remainingSeconds,
+    message,
+    requestId,
+  ) {
     const temporary = new Set([
       "success", "scheduled", "failed", "rejected", "cooldown", "busy",
     ]);
     if (!temporary.has(state)) return state;
-    const key = `${state}:${action || "none"}:${updatedAt || "local"}`;
+    const key = `${state}:${requestId || "local"}:${updatedAt || "local"}`;
     if (state === "cooldown") {
       const remaining = this._cooldownSecondsRemaining(
         remainingSeconds,
@@ -805,7 +882,6 @@ class VpsSentinelAppleCard extends HTMLElement {
       );
       if (remaining <= 0) return "idle";
       this._scheduleCooldownUpdate(key, remaining);
-      if (remaining <= 5) return "cooldown";
     }
     if (this._dismissedMaintenanceEvent === key) return "idle";
     if (this._maintenanceDismissTimerKey !== key) {
@@ -814,6 +890,14 @@ class VpsSentinelAppleCard extends HTMLElement {
       this._maintenanceDismissTimer = setTimeout(() => {
         this._dismissedMaintenanceEvent = key;
         this._maintenanceDismissTimerKey = null;
+        if (
+          this._activeMaintenanceRequest
+          && this._activeMaintenanceRequest.requestId === requestId
+        ) this._activeMaintenanceRequest = null;
+        if (
+          this._localMaintenanceState
+          && this._localMaintenanceState.requestId === requestId
+        ) this._localMaintenanceState = null;
         this._update();
       }, 5000);
     }
@@ -945,12 +1029,18 @@ class VpsSentinelAppleCard extends HTMLElement {
     if (!action || !this._config.commandTopic || !this._hass) return;
     const requestId = globalThis.crypto?.randomUUID?.()
       || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    this._activeMaintenanceRequest = {
+      requestId,
+      action,
+      startedAt: Date.now(),
+    };
     try {
       this._localMaintenanceState = {
         state: "sending",
         message: "正在送出操作…",
         at: Date.now(),
         action,
+        requestId,
         expiresAt: Date.now() + 15000,
       };
       this._update();
@@ -969,6 +1059,7 @@ class VpsSentinelAppleCard extends HTMLElement {
         message: "命令已送出，等待主機回覆…",
         at: Date.now(),
         action,
+        requestId,
         expiresAt: Date.now() + 15000,
       };
       this._update();
@@ -978,6 +1069,7 @@ class VpsSentinelAppleCard extends HTMLElement {
         message: "無法送出，請檢查 MQTT 權限",
         at: Date.now(),
         action,
+        requestId,
         expiresAt: Date.now() + 5000,
       };
       this._update();
