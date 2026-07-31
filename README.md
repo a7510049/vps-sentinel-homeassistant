@@ -91,7 +91,7 @@ sudo vps-sentinel-apple --apply
 若仍看到舊版卡片，請確認資源網址是：
 
 ```text
-/local/vps-sentinel-apple-card.js?v=0.9.2
+/local/vps-sentinel-apple-card.js?v=0.9.6
 ```
 
 ## 📱 手機如何使用
