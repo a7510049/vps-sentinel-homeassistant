@@ -1,9 +1,0 @@
-@GitHub
-
-ChatGPT GitHub write test successful.
-
-Created: 2026-07-31 17:29 Asia/Taipei
-Updated: 2026-07-31 Asia/Taipei
-Purpose: Verify that the connected GitHub integration has repository write access and that the chat request explicitly invokes @GitHub.
-
-This file can be safely deleted after verification.
