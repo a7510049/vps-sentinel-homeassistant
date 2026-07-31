@@ -93,8 +93,9 @@ if [[ -z "${source_dir}" ]]; then
   red "下載內容不完整，已取消升級。"
   exit 1
 fi
-for file in VERSION manage.sh update.sh uninstall.sh upgrade.sh doctor.sh \
-  backup.sh automations.sh apple-dashboard.sh \
+for file in VERSION scripts/manage.sh scripts/update.sh scripts/uninstall.sh \
+  scripts/upgrade.sh scripts/doctor.sh scripts/backup.sh \
+  scripts/automations.sh scripts/apple-dashboard.sh \
   vps-monitor/vps_monitor.py vps-monitor/requirements.txt \
   vps-monitor/vps-monitor.service \
   home-assistant/blueprints/problem-notification.yaml \
@@ -111,10 +112,14 @@ if [[ "${downloaded_version}" != "${latest_version}" ]]; then
   red "版本檔與 Release 標籤不一致，已取消升級。"
   exit 1
 fi
-bash -n "${source_dir}/manage.sh" "${source_dir}/update.sh" \
-  "${source_dir}/uninstall.sh" "${source_dir}/upgrade.sh" \
-  "${source_dir}/doctor.sh" "${source_dir}/backup.sh" \
-  "${source_dir}/automations.sh" "${source_dir}/apple-dashboard.sh"
+bash -n "${source_dir}/scripts/manage.sh" \
+  "${source_dir}/scripts/update.sh" \
+  "${source_dir}/scripts/uninstall.sh" \
+  "${source_dir}/scripts/upgrade.sh" \
+  "${source_dir}/scripts/doctor.sh" \
+  "${source_dir}/scripts/backup.sh" \
+  "${source_dir}/scripts/automations.sh" \
+  "${source_dir}/scripts/apple-dashboard.sh"
 python3 -m py_compile "${source_dir}/vps-monitor/vps_monitor.py"
 green "下載內容與基本語法檢查完成"
 
@@ -204,14 +209,15 @@ if [[ "${requirements_hash}" != "${installed_hash}" ]]; then
 fi
 install -m 0644 "${source_dir}/vps-monitor/vps-monitor.service" \
   "${SERVICE_FILE}"
-install -m 0755 "${source_dir}/manage.sh" "${MANAGE_COMMAND}"
-install -m 0755 "${source_dir}/update.sh" "${UPDATE_COMMAND}"
-install -m 0755 "${source_dir}/uninstall.sh" "${UNINSTALL_COMMAND}"
-install -m 0755 "${source_dir}/upgrade.sh" "${UPGRADE_COMMAND}"
-install -m 0755 "${source_dir}/doctor.sh" "${DOCTOR_COMMAND}"
-install -m 0755 "${source_dir}/backup.sh" "${BACKUP_COMMAND}"
-install -m 0755 "${source_dir}/automations.sh" "${AUTOMATIONS_COMMAND}"
-install -m 0755 "${source_dir}/apple-dashboard.sh" "${APPLE_COMMAND}"
+install -m 0755 "${source_dir}/scripts/manage.sh" "${MANAGE_COMMAND}"
+install -m 0755 "${source_dir}/scripts/update.sh" "${UPDATE_COMMAND}"
+install -m 0755 "${source_dir}/scripts/uninstall.sh" "${UNINSTALL_COMMAND}"
+install -m 0755 "${source_dir}/scripts/upgrade.sh" "${UPGRADE_COMMAND}"
+install -m 0755 "${source_dir}/scripts/doctor.sh" "${DOCTOR_COMMAND}"
+install -m 0755 "${source_dir}/scripts/backup.sh" "${BACKUP_COMMAND}"
+install -m 0755 "${source_dir}/scripts/automations.sh" \
+  "${AUTOMATIONS_COMMAND}"
+install -m 0755 "${source_dir}/scripts/apple-dashboard.sh" "${APPLE_COMMAND}"
 install -m 0644 \
   "${source_dir}/home-assistant/www/vps-sentinel-apple-card.js" \
   "${INSTALL_DIR}/vps-sentinel-apple-card.js"
