@@ -1,22 +1,23 @@
 name: Finish structure migration
 
 on:
-  pull_request_target:
-    types: [reopened]
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   migrate:
-    if: github.event.pull_request.number == 33
+    if: github.event.issue.pull_request && github.event.issue.number == 33 && github.event.comment.body == '/finish-structure-migration'
     runs-on: ubuntu-latest
     steps:
       - name: Check out PR branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.ref }}
+          repository: a7510049/vps-sentinel-homeassistant
+          ref: chore/reorganize-project-structure-v2
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -76,4 +77,4 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
           git commit -m "fix: update references for scripts directory"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git push origin HEAD:chore/reorganize-project-structure-v2
