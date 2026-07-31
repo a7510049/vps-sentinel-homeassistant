@@ -41,6 +41,7 @@ STATE = f"{BASE}/state"
 RESOURCE_STATE = f"{BASE}/resources"
 STATUS_STATE = f"{BASE}/status"
 MAINTENANCE_STATE = f"{BASE}/maintenance"
+MAINTENANCE_EVENT = f"{BASE}/maintenance/event"
 COMMAND_TOPIC = f"{BASE}/command"
 ONLINE = f"{BASE}/online"
 CPU_WARN = float(env("CPU_WARN_PERCENT", "90"))
@@ -205,6 +206,7 @@ def maintenance_result(action, runner=run):
 
 class MaintenanceController:
     ACTIONS = {"refresh", "security_update", "reboot"}
+    PERSISTENT_STATES = {"idle", "running"}
 
     def __init__(self, client, enabled=REMOTE_ACTIONS,
                  cooldown=COMMAND_COOLDOWN, clock=time.monotonic,
@@ -217,22 +219,76 @@ class MaintenanceController:
         self.lock = threading.Lock()
         self.busy = False
         self.last_started = {}
+        self.current_action = "none"
+        self.current_request_id = None
 
-    def publish(self, state, action="none", message="", remaining_seconds=None):
+    def _payload(self, state, action="none", message="", request_id=None,
+                 remaining_seconds=None):
         payload = {
             "state": state,
             "action": action,
             "message": message,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
+        if request_id:
+            payload["request_id"] = request_id
         if remaining_seconds is not None:
             payload["remaining_seconds"] = remaining_seconds
+        return payload
+
+    def publish_state(self, state, action="none", message="",
+                      request_id=None):
+        payload = self._payload(
+            state, action, message, request_id=request_id
+        )
         self.client.publish(
             MAINTENANCE_STATE,
             json.dumps(payload, ensure_ascii=False),
             qos=1,
             retain=True,
         )
+
+    def publish_event(self, state, action="none", message="",
+                      request_id=None, remaining_seconds=None):
+        payload = self._payload(
+            state,
+            action,
+            message,
+            request_id=request_id,
+            remaining_seconds=remaining_seconds,
+        )
+        payload["event_type"] = state
+        self.client.publish(
+            MAINTENANCE_EVENT,
+            json.dumps(payload, ensure_ascii=False),
+            qos=1,
+            retain=False,
+        )
+
+    def publish(self, state, action="none", message="",
+                remaining_seconds=None, request_id=None):
+        if state in self.PERSISTENT_STATES:
+            self.publish_state(
+                state, action, message, request_id=request_id
+            )
+            return
+        self.publish_event(
+            state,
+            action,
+            message,
+            request_id=request_id,
+            remaining_seconds=remaining_seconds,
+        )
+
+    def snapshot(self):
+        with self.lock:
+            if self.busy:
+                return (
+                    "running",
+                    self.current_action,
+                    self.current_request_id,
+                )
+        return "idle", "none", None
 
     def submit(self, raw_payload):
         if not self.enabled:
@@ -268,12 +324,21 @@ class MaintenanceController:
             or not fresh
             or not valid_request
         ):
-            self.publish("rejected", message="命令不在允許清單")
+            self.publish(
+                "rejected",
+                message="命令不在允許清單",
+                request_id=request_id if valid_request else None,
+            )
             return False
         with self.lock:
             now = self.clock()
             if self.busy:
-                self.publish("busy", action, "已有維護操作正在執行")
+                self.publish(
+                    "busy",
+                    action,
+                    "已有維護操作正在執行",
+                    request_id=request_id,
+                )
                 return False
             if now - self.last_started.get(action, float("-inf")) < self.cooldown:
                 remaining = max(
@@ -287,33 +352,53 @@ class MaintenanceController:
                     action,
                     f"{action} 操作冷卻中，約 {remaining} 秒後可再次執行",
                     remaining,
+                    request_id=request_id,
                 )
                 return False
             self.busy = True
             self.last_started[action] = now
+            self.current_action = action
+            self.current_request_id = request_id
         worker = threading.Thread(
             target=self._execute,
-            args=(action,),
+            args=(action, request_id),
             daemon=True,
             name=f"maintenance-{action}",
         )
         worker.start()
         return True
 
-    def _execute(self, action):
-        self.publish("running", action, "操作執行中")
+    def _execute(self, action, request_id):
+        self.publish_state(
+            "running",
+            action,
+            "操作執行中",
+            request_id=request_id,
+        )
         try:
             success, message = maintenance_result(action)
             state = "scheduled" if success and action == "reboot" else (
                 "success" if success else "failed"
             )
-            self.publish(state, action, message)
+            self.publish_event(
+                state,
+                action,
+                message,
+                request_id=request_id,
+            )
         except Exception:
-            self.publish("failed", action, "操作發生未預期錯誤")
+            self.publish_event(
+                "failed",
+                action,
+                "操作發生未預期錯誤",
+                request_id=request_id,
+            )
         finally:
             with self.lock:
                 self.busy = False
-
+                self.current_action = "none"
+                self.current_request_id = None
+            self.publish_state("idle", message="等待操作")
 
 def security_updates():
     result = run(["apt-get", "-s", "upgrade"])
@@ -534,9 +619,40 @@ def publish_discovery(client):
             value_template="{{ value_json.get('state', 'unknown') }}",
             attributes="{{ value_json | tojson }}",
         )
+        event_config = {
+            "name": "主機維護事件",
+            "unique_id": f"{VPS_ID}_maintenance_event",
+            "default_entity_id": f"event.{VPS_ID}_maintenance_event",
+            "state_topic": MAINTENANCE_EVENT,
+            "event_types": [
+                "success",
+                "scheduled",
+                "failed",
+                "cooldown",
+                "busy",
+                "rejected",
+                "disabled",
+            ],
+            "availability_topic": ONLINE,
+            "payload_available": "ON",
+            "payload_not_available": "OFF",
+            "device": DEVICE,
+            "entity_category": "diagnostic",
+            "icon": "mdi:message-alert-outline",
+        }
+        client.publish(
+            f"{PREFIX}/event/{VPS_ID}/maintenance_event/config",
+            json.dumps(event_config, ensure_ascii=False),
+            qos=1,
+            retain=True,
+        )
     else:
         client.publish(
             f"{PREFIX}/sensor/{VPS_ID}/maintenance_status/config",
+            payload=None, qos=1, retain=True,
+        )
+        client.publish(
+            f"{PREFIX}/event/{VPS_ID}/maintenance_event/config",
             payload=None, qos=1, retain=True,
         )
     binaries = {
@@ -587,18 +703,20 @@ def main():
     maintenance = MaintenanceController(client)
 
     def on_command(_client, _userdata, message):
-        # Clearing a retained MQTT command uses an empty payload. Depending on
-        # broker timing, the client may receive its own cleanup message after
-        # subscribing; it is housekeeping, not an invalid user command.
+        # Empty retained cleanup messages are housekeeping.
         if not message.payload:
             return
         if message.retain:
-            maintenance.publish("rejected", message="已拒絕保留的舊命令")
+            maintenance.publish_event(
+                "rejected", message="已拒絕保留的舊命令"
+            )
             return
         try:
             payload = message.payload.decode("utf-8")
         except UnicodeDecodeError:
-            maintenance.publish("rejected", message="命令編碼無效")
+            maintenance.publish_event(
+                "rejected", message="命令編碼無效"
+            )
             return
         maintenance.submit(payload)
 
@@ -610,12 +728,20 @@ def main():
         publish_discovery(mqtt_client)
         mqtt_client.publish(ONLINE, "ON", qos=1, retain=True)
         if REMOTE_ACTIONS:
-            # A maintenance command must never survive a reconnect. Clear any
-            # retained payload before subscribing, then reject retained
-            # messages defensively in the callback as well.
-            mqtt_client.publish(COMMAND_TOPIC, payload=None, qos=1, retain=True)
+            mqtt_client.publish(
+                COMMAND_TOPIC, payload=None, qos=1, retain=True
+            )
+            mqtt_client.publish(
+                MAINTENANCE_EVENT, payload=None, qos=1, retain=True
+            )
             mqtt_client.subscribe(COMMAND_TOPIC, qos=1)
-            maintenance.publish("idle", message="等待操作")
+            state, action, request_id = maintenance.snapshot()
+            message = (
+                "操作執行中" if state == "running" else "等待操作"
+            )
+            maintenance.publish_state(
+                state, action, message, request_id=request_id
+            )
         wake_on_connect.set()
 
     client.on_connect = on_connect
