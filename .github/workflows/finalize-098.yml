@@ -19,7 +19,17 @@ jobs:
           fetch-depth: 0
 
       - name: Apply final stability changes
-        run: python3 tools/finalize_098.py
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("tools/finalize_098.py")
+          text = path.read_text(encoding="utf-8")
+          start = text.index("# Update existing interface tests for the dynamic version source.")
+          end = text.index("# Extend stability tests so normal PR validation blocks inconsistent releases.")
+          path.write_text(text[:start] + text[end:], encoding="utf-8")
+          PY
+          python3 tools/finalize_098.py
 
       - name: Check shell syntax
         run: bash -n setup.sh scripts/*.sh vps-monitor/install.sh
