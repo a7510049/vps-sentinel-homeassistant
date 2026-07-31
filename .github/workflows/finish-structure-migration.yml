@@ -1,0 +1,79 @@
+name: Finish structure migration
+
+on:
+  pull_request_target:
+    types: [reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.event.pull_request.number == 33
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update moved script paths
+        shell: python
+        run: |
+          from pathlib import Path
+
+          names = [
+              "apple-dashboard.sh", "automations.sh", "backup.sh", "doctor.sh",
+              "manage.sh", "uninstall.sh", "update.sh", "upgrade.sh",
+          ]
+          replacements = {}
+          for name in names:
+              replacements[f"${{REPO_DIR}}/{name}"] = f"${{REPO_DIR}}/scripts/{name}"
+              replacements[f"${{source_dir}}/{name}"] = f"${{source_dir}}/scripts/{name}"
+              replacements[f'ROOT / "{name}"'] = f'ROOT / "scripts" / "{name}"'
+              replacements[f"ROOT / '{name}'"] = f"ROOT / 'scripts' / '{name}'"
+
+          for path in Path(".").rglob("*"):
+              if not path.is_file() or ".git" in path.parts:
+                  continue
+              if path == Path(".github/workflows/finish-structure-migration.yml"):
+                  continue
+              if path.suffix not in {".sh", ".py", ".yml", ".yaml", ".md"}:
+                  continue
+              try:
+                  original = path.read_text(encoding="utf-8")
+              except UnicodeDecodeError:
+                  continue
+              updated = original
+              for old, new in replacements.items():
+                  updated = updated.replace(old, new)
+              if updated != original:
+                  path.write_text(updated, encoding="utf-8")
+
+          Path(".github/workflows/finish-structure-migration.yml").unlink(missing_ok=True)
+
+      - name: Validate migrated repository
+        run: |
+          set -Eeuo pipefail
+          bash -n setup.sh scripts/*.sh vps-monitor/install.sh
+          shellcheck setup.sh scripts/*.sh vps-monitor/install.sh
+          python3 -m pip install -r vps-monitor/requirements.txt
+          python3 -m unittest discover -s tests -v
+          python3 -m py_compile vps-monitor/vps_monitor.py tests/test_vps_monitor.py tests/test_command_interface.py
+          git diff --check
+          if grep -R --line-number --exclude-dir=.git \
+            -E '\$\{REPO_DIR\}/(apple-dashboard|automations|backup|doctor|manage|uninstall|update|upgrade)\.sh|\$\{source_dir\}/(apple-dashboard|automations|backup|doctor|manage|uninstall|update|upgrade)\.sh' .; then
+            exit 1
+          fi
+
+      - name: Commit migration fixes
+        run: |
+          set -Eeuo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: update references for scripts directory"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
