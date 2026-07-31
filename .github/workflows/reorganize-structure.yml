@@ -1,21 +1,30 @@
 name: Reorganize repository structure
 
 on:
-  push:
+  pull_request:
     branches:
-      - chore/reorganize-project-structure
+      - main
 
 permissions:
   contents: write
 
 jobs:
   reorganize:
-    if: ${{ !contains(github.event.head_commit.message, '[structure-done]') }}
+    if: ${{ !contains(github.event.pull_request.head.sha, '[structure-done]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: chore/reorganize-project-structure
           fetch-depth: 0
+
+      - name: Stop when migration is already complete
+        shell: bash
+        run: |
+          if [[ ! -e manage.sh ]]; then
+            echo "Migration already complete."
+            exit 0
+          fi
 
       - name: Move operational scripts
         shell: bash
@@ -48,7 +57,6 @@ jobs:
                   f']({name})': f'](scripts/{name})',
               })
 
-          # CI command lists contain bare repository paths.
           for name in scripts:
               replacements[f' {name}'] = f' scripts/{name}'
 
@@ -68,14 +76,12 @@ jobs:
               if updated != original:
                   path.write_text(updated, encoding='utf-8')
 
-          # setup.sh remains the stable public entry point at repository root.
           setup = Path('setup.sh')
           text = setup.read_text(encoding='utf-8')
           for name in scripts:
               text = text.replace(f'${{REPO_DIR}}/{name}', f'${{REPO_DIR}}/scripts/{name}')
           setup.write_text(text, encoding='utf-8')
 
-          # The upgrade archive now stores operational scripts below scripts/.
           upgrade = Path('scripts/upgrade.sh')
           text = upgrade.read_text(encoding='utf-8')
           for name in scripts:
