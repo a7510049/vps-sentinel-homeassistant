@@ -88,6 +88,7 @@ show_resource_steps() {
 
 更新既有版本時，請把原本資源網址的版本參數改成上方網址，
 再重新整理 Home Assistant App；不需要重新啟動 Home Assistant。
+程式不會直接修改 .storage。
 EOF
 }
 
