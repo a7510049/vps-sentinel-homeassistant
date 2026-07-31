@@ -46,6 +46,7 @@ jobs:
           vps-monitor/vps_monitor.py
           tests/test_vps_monitor.py
           tests/test_command_interface.py
+          tests/test_release_integrity.py
 
       - name: Check moved script references
         run: |
