@@ -7,6 +7,7 @@ readonly HA_CONFIG="${HA_DIR}/config/configuration.yaml"
 readonly CARD_SOURCE="/opt/vps-monitor/vps-sentinel-apple-card.js"
 readonly CARD_TARGET="${HA_DIR}/config/www/vps-sentinel-apple-card.js"
 readonly MQTT_PASSWD="/etc/mosquitto/passwd"
+readonly CREDENTIALS_FILE="/root/vps-homeassistant-credentials.txt"
 readonly IP_BANS="${HA_DIR}/config/ip_bans.yaml"
 readonly REPORT_DIR="/root/vps-sentinel-reports"
 
@@ -262,6 +263,34 @@ run_checks() {
   echo "檢查完成：${PASS_COUNT} 項正常、${WARN_COUNT} 項提醒、${FAIL_COUNT} 項異常"
 }
 
+save_monitor_credential() {
+  local password="$1"
+  python3 - "${CREDENTIALS_FILE}" "${password}" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+password = sys.argv[2]
+lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else [
+    "VPS Monitor 安裝憑證",
+]
+lines = [
+    line for line in lines
+    if not line.startswith("VPS Monitor MQTT 使用者：")
+    and not line.startswith("VPS Monitor MQTT 密碼：")
+]
+while lines and not lines[-1].strip():
+    lines.pop()
+lines.extend([
+    "",
+    "VPS Monitor MQTT 使用者：vps-monitor",
+    f"VPS Monitor MQTT 密碼：{password}",
+])
+path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+  chmod 0600 "${CREDENTIALS_FILE}"
+}
+
 reset_monitor_mqtt_password() {
   local new_password backup_passwd backup_env answer
   [[ -f "${MQTT_PASSWD}" && -f "${ENV_FILE}" ]] || {
@@ -300,8 +329,10 @@ PY
   chmod 0600 "${ENV_FILE}"
   if systemctl restart mosquitto && systemctl restart vps-monitor &&
      sleep 5 && mqtt_probe; then
+    save_monitor_credential "${new_password}"
     rm -f -- "${backup_passwd}" "${backup_env}"
     green "VPS Monitor MQTT 密碼已同步，實際登入成功"
+    green "新密碼已保存於 ${CREDENTIALS_FILE}（僅 root 可讀）"
     return
   fi
   cp -a "${backup_passwd}" "${MQTT_PASSWD}"

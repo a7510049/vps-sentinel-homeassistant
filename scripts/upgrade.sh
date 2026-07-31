@@ -67,6 +67,18 @@ mqtt_probe() {
     grep -qx 'ON'
 }
 
+wait_for_monitor_mqtt() {
+  local started_at="$1" _
+  for _ in {1..15}; do
+    if journalctl -u vps-monitor --since "${started_at}" --no-pager \
+        2>/dev/null | grep -q 'MQTT 已連線' && mqtt_probe; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
 printf '\033[1;35m'
 cat <<'BANNER'
 ╭────────────────────────────────────────╮
@@ -183,18 +195,25 @@ rollback() {
   if [[ -f "${backup}/vps-sentinel-apple-card.js" ]]; then
     install -m 0644 "${backup}/vps-sentinel-apple-card.js" \
       "${INSTALL_DIR}/vps-sentinel-apple-card.js"
+  else
+    rm -f -- "${INSTALL_DIR}/vps-sentinel-apple-card.js"
   fi
   if [[ -f "${backup}/homeassistant-card.js" ]]; then
     install -d -m 0755 "$(dirname "${CARD_TARGET}")"
     install -m 0644 "${backup}/homeassistant-card.js" "${CARD_TARGET}"
+  else
+    rm -f -- "${CARD_TARGET}"
   fi
   [[ ! -f "${backup}/vps-monitor.service" ]] ||
     install -m 0644 "${backup}/vps-monitor.service" "${SERVICE_FILE}"
   for name in vps-sentinel vps-sentinel-update vps-sentinel-uninstall \
     vps-sentinel-upgrade vps-sentinel-doctor vps-sentinel-backup \
     vps-sentinel-automations vps-sentinel-apple; do
-    [[ ! -f "${backup}/${name}" ]] ||
+    if [[ -f "${backup}/${name}" ]]; then
       install -m 0755 "${backup}/${name}" "/usr/local/sbin/${name}"
+    else
+      rm -f -- "/usr/local/sbin/${name}"
+    fi
   done
   rm -rf -- "${INSTALL_DIR}/blueprints"
   [[ ! -d "${backup}/blueprints" ]] ||
@@ -256,10 +275,13 @@ install -m 0644 "${source_dir}"/home-assistant/blueprints/*.yaml \
   "${INSTALL_DIR}/blueprints/"
 printf '%s\n' "${latest_version}" > "${INSTALL_DIR}/.version"
 systemctl daemon-reload
+monitor_started_at="$(date --iso-8601=seconds)"
 systemctl restart vps-monitor
-sleep 5
 systemctl is-active --quiet vps-monitor
-mqtt_probe
+if ! wait_for_monitor_mqtt "${monitor_started_at}"; then
+  journalctl -u vps-monitor -n 30 --no-pager || true
+  false
+fi
 upgrade_started=false
 trap - ERR
 
@@ -282,6 +304,8 @@ green "VPS Sentinel 已安全升級至 ${latest_version}"
 green "監控服務、MQTT 認證與在線資料均已驗證"
 if [[ -f "${CARD_TARGET}" ]]; then
   green "Apple 卡片前端檔案已同步，不需要重新啟動 Home Assistant"
+  yellow "請將 Home Assistant 儀表板資源更新為："
+  echo "  /local/vps-sentinel-apple-card.js?v=${latest_version}"
 fi
 if [[ "${cleanup_ok}" == "true" ]]; then
   green "舊版暫存已清理，僅保留最近一份回復備份"

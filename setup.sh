@@ -666,6 +666,7 @@ else
 fi
 install -m 0644 "${REPO_DIR}/vps-monitor/vps-monitor.service" \
   /etc/systemd/system/vps-monitor.service
+install -m 0644 "${REPO_DIR}/VERSION" "${MONITOR_DIR}/.version"
 systemctl daemon-reload
 systemctl enable vps-monitor
 monitor_started_at="$(date --iso-8601=seconds)"
@@ -698,8 +699,6 @@ install -m 0644 \
 install -d -m 0755 "${MONITOR_DIR}/blueprints"
 install -m 0644 "${REPO_DIR}"/home-assistant/blueprints/*.yaml \
   "${MONITOR_DIR}/blueprints/"
-install -m 0644 "${REPO_DIR}/VERSION" "${MONITOR_DIR}/.version"
-
 blue "步驟 6/6：最後檢查"
 sleep 3
 checks_failed=false

@@ -26,12 +26,18 @@ class StabilityPreparationTests(unittest.TestCase):
         self.assertIn("已同步 VPS Monitor MQTT 密碼", SETUP)
         self.assertIn("use_x_forwarded_for: true", SETUP)
         self.assertIn('    - "::1"', SETUP)
+        self.assertLess(
+            SETUP.index('install -m 0644 "${REPO_DIR}/VERSION"'),
+            SETUP.index('monitor_started_at="$(date --iso-8601=seconds)"'),
+        )
 
     def test_apple_resource_url_uses_installed_version(self):
         self.assertIn('VERSION_FILE="/opt/vps-monitor/.version"', APPLE)
         self.assertIn("resource_url()", APPLE)
         self.assertNotIn('RESOURCE_URL="/local/', APPLE)
         self.assertIn("不需要重新啟動 Home Assistant", APPLE)
+        self.assertIn("CARD_VERSION", APPLE)
+        self.assertNotIn('version="0.9.8"', APPLE)
 
     def test_apple_dashboard_includes_maintenance_event(self):
         self.assertIn("maintenanceEvent:", APPLE)
@@ -50,12 +56,17 @@ class StabilityPreparationTests(unittest.TestCase):
         self.assertIn("清除 Home Assistant IP 封鎖", DOCTOR)
         self.assertIn("Tailscale Serve", DOCTOR)
         self.assertIn("Apple 卡片已同步", DOCTOR)
+        self.assertIn("save_monitor_credential", DOCTOR)
+        self.assertIn("vps-homeassistant-credentials.txt", DOCTOR)
 
     def test_upgrade_validates_runtime_and_frontend(self):
         self.assertIn("mqtt_probe", UPGRADE)
         self.assertIn("CARD_TARGET", UPGRADE)
         self.assertIn("Apple 卡片版本", UPGRADE)
         self.assertIn("MQTT 認證與在線資料均已驗證", UPGRADE)
+        self.assertIn("wait_for_monitor_mqtt", UPGRADE)
+        self.assertIn('rm -f -- "${CARD_TARGET}"', UPGRADE)
+        self.assertIn("/local/vps-sentinel-apple-card.js?v=${latest_version}", UPGRADE)
 
     def test_release_runs_validation_before_publish(self):
         self.assertIn("Run Python tests", RELEASE)

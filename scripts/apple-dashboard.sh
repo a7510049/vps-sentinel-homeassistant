@@ -32,7 +32,11 @@ installed_version() {
   local version
   version="$(tr -d '[:space:]' < "${VERSION_FILE}" 2>/dev/null || true)"
   if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    version="0.9.8"
+    version="$(sed -n 's/^const CARD_VERSION = "\([^"]*\)";.*/\1/p' \
+      "${CARD_SOURCE}" | head -n 1)"
+  fi
+  if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    version="development"
   fi
   printf '%s' "${version}"
 }
