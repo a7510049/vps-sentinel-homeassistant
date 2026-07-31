@@ -75,3 +75,5 @@ jobs:
           git add -A
           git commit -m "fix: update references for scripts directory"
           git push origin HEAD:chore/reorganize-project-structure-v2
+
+# Triggered after the workflow was present on the branch.
