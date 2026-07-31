@@ -1,0 +1,697 @@
+name: Apply maintenance notification fix
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: >-
+      github.actor != 'github-actions[bot]' &&
+      github.head_ref == 'fix/maintenance-notification-replay'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/maintenance-notification-replay
+          fetch-depth: 0
+
+      - name: Patch persistent state and transient events
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          backend_path = Path("vps-monitor/vps_monitor.py")
+          backend = backend_path.read_text(encoding="utf-8")
+          old = 'MAINTENANCE_STATE = f"{BASE}/maintenance"\nCOMMAND_TOPIC = f"{BASE}/command"'
+          new = (
+              'MAINTENANCE_STATE = f"{BASE}/maintenance"\n'
+              'MAINTENANCE_EVENT = f"{BASE}/maintenance/event"\n'
+              'COMMAND_TOPIC = f"{BASE}/command"'
+          )
+          if old not in backend:
+              raise SystemExit("找不到 maintenance topic 常數")
+          backend = backend.replace(old, new, 1)
+
+          controller = '''class MaintenanceController:
+              ACTIONS = {"refresh", "security_update", "reboot"}
+              PERSISTENT_STATES = {"idle", "running"}
+
+              def __init__(self, client, enabled=REMOTE_ACTIONS,
+                           cooldown=COMMAND_COOLDOWN, clock=time.monotonic,
+                           wall_clock=time.time):
+                  self.client = client
+                  self.enabled = enabled
+                  self.cooldown = cooldown
+                  self.clock = clock
+                  self.wall_clock = wall_clock
+                  self.lock = threading.Lock()
+                  self.busy = False
+                  self.last_started = {}
+                  self.current_action = "none"
+                  self.current_request_id = None
+
+              def _payload(self, state, action="none", message="", request_id=None,
+                           remaining_seconds=None):
+                  payload = {
+                      "state": state,
+                      "action": action,
+                      "message": message,
+                      "updated_at": datetime.now(timezone.utc).isoformat(),
+                  }
+                  if request_id:
+                      payload["request_id"] = request_id
+                  if remaining_seconds is not None:
+                      payload["remaining_seconds"] = remaining_seconds
+                  return payload
+
+              def publish_state(self, state, action="none", message="",
+                                request_id=None):
+                  payload = self._payload(
+                      state, action, message, request_id=request_id
+                  )
+                  self.client.publish(
+                      MAINTENANCE_STATE,
+                      json.dumps(payload, ensure_ascii=False),
+                      qos=1,
+                      retain=True,
+                  )
+
+              def publish_event(self, state, action="none", message="",
+                                request_id=None, remaining_seconds=None):
+                  payload = self._payload(
+                      state,
+                      action,
+                      message,
+                      request_id=request_id,
+                      remaining_seconds=remaining_seconds,
+                  )
+                  payload["event_type"] = state
+                  self.client.publish(
+                      MAINTENANCE_EVENT,
+                      json.dumps(payload, ensure_ascii=False),
+                      qos=1,
+                      retain=False,
+                  )
+
+              def publish(self, state, action="none", message="",
+                          remaining_seconds=None, request_id=None):
+                  if state in self.PERSISTENT_STATES:
+                      self.publish_state(
+                          state, action, message, request_id=request_id
+                      )
+                      return
+                  self.publish_event(
+                      state,
+                      action,
+                      message,
+                      request_id=request_id,
+                      remaining_seconds=remaining_seconds,
+                  )
+
+              def snapshot(self):
+                  with self.lock:
+                      if self.busy:
+                          return (
+                              "running",
+                              self.current_action,
+                              self.current_request_id,
+                          )
+                  return "idle", "none", None
+
+              def submit(self, raw_payload):
+                  if not self.enabled:
+                      self.publish("disabled", message="遠端維護未啟用")
+                      return False
+                  if not isinstance(raw_payload, str) or len(raw_payload) > 512:
+                      self.publish("rejected", message="命令內容過長或格式無效")
+                      return False
+                  try:
+                      payload = json.loads(raw_payload)
+                  except (TypeError, ValueError, json.JSONDecodeError):
+                      self.publish("rejected", message="命令格式無效")
+                      return False
+                  if not isinstance(payload, dict):
+                      self.publish("rejected", message="命令格式無效")
+                      return False
+                  action = payload.get("action")
+                  request_id = payload.get("request_id")
+                  issued_at = payload.get("issued_at")
+                  allowed_keys = {"action", "request_id", "issued_at"}
+                  fresh = (
+                      isinstance(issued_at, (int, float))
+                      and abs(self.wall_clock() * 1000 - issued_at) <= 60000
+                  )
+                  valid_request = (
+                      isinstance(request_id, str)
+                      and 1 <= len(request_id) <= 64
+                      and re.fullmatch(r"[A-Za-z0-9_-]+", request_id)
+                  )
+                  if (
+                      action not in self.ACTIONS
+                      or set(payload) - allowed_keys
+                      or not fresh
+                      or not valid_request
+                  ):
+                      self.publish(
+                          "rejected",
+                          message="命令不在允許清單",
+                          request_id=request_id if valid_request else None,
+                      )
+                      return False
+                  with self.lock:
+                      now = self.clock()
+                      if self.busy:
+                          self.publish(
+                              "busy",
+                              action,
+                              "已有維護操作正在執行",
+                              request_id=request_id,
+                          )
+                          return False
+                      if now - self.last_started.get(action, float("-inf")) < self.cooldown:
+                          remaining = max(
+                              1,
+                              math.ceil(
+                                  self.cooldown - (now - self.last_started[action])
+                              ),
+                          )
+                          self.publish(
+                              "cooldown",
+                              action,
+                              f"{action} 操作冷卻中，約 {remaining} 秒後可再次執行",
+                              remaining,
+                              request_id=request_id,
+                          )
+                          return False
+                      self.busy = True
+                      self.last_started[action] = now
+                      self.current_action = action
+                      self.current_request_id = request_id
+                  worker = threading.Thread(
+                      target=self._execute,
+                      args=(action, request_id),
+                      daemon=True,
+                      name=f"maintenance-{action}",
+                  )
+                  worker.start()
+                  return True
+
+              def _execute(self, action, request_id):
+                  self.publish_state(
+                      "running",
+                      action,
+                      "操作執行中",
+                      request_id=request_id,
+                  )
+                  try:
+                      success, message = maintenance_result(action)
+                      state = "scheduled" if success and action == "reboot" else (
+                          "success" if success else "failed"
+                      )
+                      self.publish_event(
+                          state,
+                          action,
+                          message,
+                          request_id=request_id,
+                      )
+                  except Exception:
+                      self.publish_event(
+                          "failed",
+                          action,
+                          "操作發生未預期錯誤",
+                          request_id=request_id,
+                      )
+                  finally:
+                      with self.lock:
+                          self.busy = False
+                          self.current_action = "none"
+                          self.current_request_id = None
+                      self.publish_state("idle", message="等待操作")
+          '''
+          controller = re.sub(r"^ {10}", "", controller, flags=re.MULTILINE)
+          backend, count = re.subn(
+              r"class MaintenanceController:.*?\n\ndef security_updates\(\):",
+              controller.rstrip() + "\n\ndef security_updates():",
+              backend,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit("找不到 MaintenanceController")
+
+          discovery = '''    if REMOTE_ACTIONS:
+              sensors["maintenance_status"] = config_sensor(
+                  "maintenance_status",
+                  "主機維護狀態",
+                  icon="mdi:tools",
+                  topic=MAINTENANCE_STATE,
+                  value_template="{{ value_json.get('state', 'unknown') }}",
+                  attributes="{{ value_json | tojson }}",
+              )
+              event_config = {
+                  "name": "主機維護事件",
+                  "unique_id": f"{VPS_ID}_maintenance_event",
+                  "default_entity_id": f"event.{VPS_ID}_maintenance_event",
+                  "state_topic": MAINTENANCE_EVENT,
+                  "event_types": [
+                      "success",
+                      "scheduled",
+                      "failed",
+                      "cooldown",
+                      "busy",
+                      "rejected",
+                      "disabled",
+                  ],
+                  "availability_topic": ONLINE,
+                  "payload_available": "ON",
+                  "payload_not_available": "OFF",
+                  "device": DEVICE,
+                  "entity_category": "diagnostic",
+                  "icon": "mdi:message-alert-outline",
+              }
+              client.publish(
+                  f"{PREFIX}/event/{VPS_ID}/maintenance_event/config",
+                  json.dumps(event_config, ensure_ascii=False),
+                  qos=1,
+                  retain=True,
+              )
+          else:
+              client.publish(
+                  f"{PREFIX}/sensor/{VPS_ID}/maintenance_status/config",
+                  payload=None, qos=1, retain=True,
+              )
+              client.publish(
+                  f"{PREFIX}/event/{VPS_ID}/maintenance_event/config",
+                  payload=None, qos=1, retain=True,
+              )
+          binaries = {'''
+          discovery = re.sub(r"^ {10}", "", discovery, flags=re.MULTILINE)
+          backend, count = re.subn(
+              r"    if REMOTE_ACTIONS:\n        sensors\[\"maintenance_status\"\].*?\n    binaries = \{",
+              discovery.rstrip(),
+              backend,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit("找不到 maintenance discovery 區段")
+
+          callbacks = '''    def on_command(_client, _userdata, message):
+              # Clearing a retained MQTT command uses an empty payload. Depending on
+              # broker timing, the client may receive its own cleanup message after
+              # subscribing; it is housekeeping, not an invalid user command.
+              if not message.payload:
+                  return
+              if message.retain:
+                  maintenance.publish_event(
+                      "rejected", message="已拒絕保留的舊命令"
+                  )
+                  return
+              try:
+                  payload = message.payload.decode("utf-8")
+              except UnicodeDecodeError:
+                  maintenance.publish_event(
+                      "rejected", message="命令編碼無效"
+                  )
+                  return
+              maintenance.submit(payload)
+
+              def on_connect(mqtt_client, _userdata, _flags, reason_code, _properties):
+                  if reason_code != 0:
+                      print(f"MQTT 連線遭拒：{reason_code}", flush=True)
+                      return
+                  print(f"MQTT 已連線：{HOST}:{PORT}", flush=True)
+                  publish_discovery(mqtt_client)
+                  mqtt_client.publish(ONLINE, "ON", qos=1, retain=True)
+                  if REMOTE_ACTIONS:
+                      # A maintenance command must never survive a reconnect. Clear any
+                      # retained payload before subscribing, then reject retained
+                      # messages defensively in the callback as well.
+                      mqtt_client.publish(COMMAND_TOPIC, payload=None, qos=1, retain=True)
+                      mqtt_client.publish(
+                          MAINTENANCE_EVENT, payload=None, qos=1, retain=True
+                      )
+                      mqtt_client.subscribe(COMMAND_TOPIC, qos=1)
+                      state, action, request_id = maintenance.snapshot()
+                      message = "操作執行中" if state == "running" else "等待操作"
+                      maintenance.publish_state(
+                          state,
+                          action,
+                          message,
+                          request_id=request_id,
+                      )
+                  wake_on_connect.set()'''
+          callbacks = re.sub(r"^ {14}", "", callbacks, flags=re.MULTILINE)
+          backend, count = re.subn(
+              r"    def on_command\(_client, _userdata, message\):.*?\n        wake_on_connect\.set\(\)",
+              callbacks.rstrip(),
+              backend,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit("找不到 MQTT callback 區段")
+          backend_path.write_text(backend, encoding="utf-8")
+
+          card_path = Path("home-assistant/www/vps-sentinel-apple-card.js")
+          card = card_path.read_text(encoding="utf-8")
+          state_method = '''  _state(entityId) {
+              return this._hass?.states?.[entityId];
+            }
+
+            _maintenanceEventEntityId() {
+              if (this._config.maintenanceEvent) return this._config.maintenanceEvent;
+              const match = /^sensor\.(.+)_maintenance_status$/.exec(
+                this._config.maintenance || "",
+              );
+              return match ? `event.${match[1]}_maintenance_event` : null;
+            }
+
+            _matchingMaintenanceEvent(entity) {
+              const request = this._activeMaintenanceRequest;
+              const attributes = entity?.attributes || {};
+              const eventType = attributes.event_type;
+              const validTypes = new Set([
+                "success", "scheduled", "failed", "cooldown", "busy",
+                "rejected", "disabled",
+              ]);
+              if (
+                !request
+                || attributes.request_id !== request.requestId
+                || !validTypes.has(eventType)
+              ) return null;
+              const updatedAt = attributes.updated_at || entity.last_changed;
+              const key = `${eventType}:${request.requestId}:${updatedAt || entity.state}`;
+              if (this._dismissedMaintenanceEvent === key) return null;
+              return {
+                state: eventType,
+                action: attributes.action || request.action,
+                message: attributes.message,
+                remainingSeconds: attributes.remaining_seconds,
+                updatedAt,
+                requestId: request.requestId,
+                key,
+              };
+            }'''
+          state_method = re.sub(r"^ {12}", "", state_method, flags=re.MULTILINE)
+          old_state = '''  _state(entityId) {
+              return this._hass?.states?.[entityId];
+            }'''
+          old_state = re.sub(r"^ {12}", "", old_state, flags=re.MULTILINE)
+          if old_state not in card:
+              raise SystemExit("找不到 _state()")
+          card = card.replace(old_state, state_method, 1)
+
+          maintenance_block = '''    const maintenanceEntity = this._state(this._config.maintenance);
+              const maintenanceEventEntity = this._state(
+                this._maintenanceEventEntityId(),
+              );
+              const maintenance = this._nodes.maintenance;
+              const maintenanceVisible = Boolean(
+                this._config.commandTopic && maintenanceEntity,
+              );
+              maintenance.classList.toggle("visible", maintenanceVisible);
+              if (maintenanceVisible) {
+                const backendState = maintenanceEntity.state;
+                const backendAttributes = maintenanceEntity.attributes || {};
+                const transientStates = new Set([
+                  "success", "scheduled", "failed", "rejected", "cooldown", "busy",
+                ]);
+                if (
+                  this._localMaintenanceState
+                  && Date.now() > this._localMaintenanceState.expiresAt
+                ) {
+                  this._localMaintenanceState = null;
+                  this._activeMaintenanceRequest = null;
+                }
+                const matchingEvent = this._matchingMaintenanceEvent(
+                  maintenanceEventEntity,
+                );
+                const localState = this._localMaintenanceState;
+                let state = "idle";
+                let progressMessage = "";
+                let progressAction = "none";
+                let cooldownRemaining;
+                let updatedAt;
+                let requestId;
+
+                if (backendState === "running") {
+                  state = "running";
+                  progressMessage = backendAttributes.message;
+                  progressAction = backendAttributes.action;
+                  updatedAt = backendAttributes.updated_at;
+                  requestId = backendAttributes.request_id;
+                  if (
+                    this._activeMaintenanceRequest
+                    && requestId === this._activeMaintenanceRequest.requestId
+                  ) this._localMaintenanceState = null;
+                } else if (matchingEvent) {
+                  state = matchingEvent.state;
+                  progressMessage = matchingEvent.message;
+                  progressAction = matchingEvent.action;
+                  cooldownRemaining = matchingEvent.remainingSeconds;
+                  updatedAt = matchingEvent.updatedAt;
+                  requestId = matchingEvent.requestId;
+                } else if (localState) {
+                  state = localState.state;
+                  progressMessage = localState.message;
+                  progressAction = localState.action;
+                  requestId = localState.requestId;
+                } else if (!transientStates.has(backendState)) {
+                  state = backendState;
+                  progressMessage = backendAttributes.message;
+                  progressAction = backendAttributes.action;
+                  updatedAt = backendAttributes.updated_at;
+                }
+
+                const displayState = this._maintenanceDisplayState(
+                  state,
+                  progressAction,
+                  updatedAt,
+                  cooldownRemaining,
+                  progressMessage,
+                  requestId,
+                );
+                const busy = displayState === "running" || displayState === "sending";
+                this._setMaintenanceProgress(
+                  displayState,
+                  this._maintenanceMessage(
+                    displayState,
+                    progressAction,
+                    progressMessage,
+                    cooldownRemaining,
+                    updatedAt,
+                  ),
+                );
+                for (const button of maintenance.querySelectorAll(".action")) {
+                  button.disabled = busy;
+                }
+                maintenance.classList.toggle("busy", busy);
+              }
+            }'''
+          maintenance_block = re.sub(r"^ {12}", "", maintenance_block, flags=re.MULTILINE)
+          card, count = re.subn(
+              r"    const maintenanceEntity = this\._state\(this\._config\.maintenance\);.*?\n    \}\n  \}\n\n  _maintenanceDisplayState",
+              maintenance_block.rstrip() + "\n\n  _maintenanceDisplayState",
+              card,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit("找不到 card maintenance render 區段")
+
+          display_method = '''  _maintenanceDisplayState(
+              state,
+              action,
+              updatedAt,
+              remainingSeconds,
+              message,
+              requestId,
+            ) {
+              const temporary = new Set([
+                "success", "scheduled", "failed", "rejected", "cooldown", "busy",
+              ]);
+              if (!temporary.has(state)) return state;
+              const key = `${state}:${requestId || "local"}:${updatedAt || "local"}`;
+              if (state === "cooldown") {
+                const remaining = this._cooldownSecondsRemaining(
+                  remainingSeconds,
+                  updatedAt,
+                  message,
+                );
+                if (remaining <= 0) return "idle";
+                this._scheduleCooldownUpdate(key, remaining);
+              }
+              if (this._dismissedMaintenanceEvent === key) return "idle";
+              if (this._maintenanceDismissTimerKey !== key) {
+                clearTimeout(this._maintenanceDismissTimer);
+                this._maintenanceDismissTimerKey = key;
+                this._maintenanceDismissTimer = setTimeout(() => {
+                  this._dismissedMaintenanceEvent = key;
+                  this._maintenanceDismissTimerKey = null;
+                  if (
+                    this._activeMaintenanceRequest
+                    && this._activeMaintenanceRequest.requestId === requestId
+                  ) this._activeMaintenanceRequest = null;
+                  if (
+                    this._localMaintenanceState
+                    && this._localMaintenanceState.requestId === requestId
+                  ) this._localMaintenanceState = null;
+                  this._update();
+                }, 5000);
+              }
+              return state;
+            }'''
+          display_method = re.sub(r"^ {12}", "", display_method, flags=re.MULTILINE)
+          card, count = re.subn(
+              r"  _maintenanceDisplayState\(state, action, updatedAt, remainingSeconds, message\) \{.*?\n  \}\n\n  _cooldownSecondsRemaining",
+              display_method.rstrip() + "\n\n  _cooldownSecondsRemaining",
+              card,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit("找不到 _maintenanceDisplayState()")
+
+          old_request = '''    const requestId = globalThis.crypto?.randomUUID?.()
+              || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            try {
+              this._localMaintenanceState = {
+                state: "sending",
+                message: "正在送出操作…",
+                at: Date.now(),
+                action,
+                expiresAt: Date.now() + 15000,
+              };'''
+          old_request = re.sub(r"^ {12}", "", old_request, flags=re.MULTILINE)
+          new_request = '''    const requestId = globalThis.crypto?.randomUUID?.()
+              || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            this._activeMaintenanceRequest = {
+              requestId,
+              action,
+              startedAt: Date.now(),
+            };
+            try {
+              this._localMaintenanceState = {
+                state: "sending",
+                message: "正在送出操作…",
+                at: Date.now(),
+                action,
+                requestId,
+                expiresAt: Date.now() + 15000,
+              };'''
+          new_request = re.sub(r"^ {12}", "", new_request, flags=re.MULTILINE)
+          if old_request not in card:
+              raise SystemExit("找不到 request 建立區段")
+          card = card.replace(old_request, new_request, 1)
+          card = card.replace(
+              '''        at: Date.now(),
+                    action,
+                    expiresAt: Date.now() + 15000,'''.replace("        ", "", 0),
+              '''        at: Date.now(),
+                    action,
+                    requestId,
+                    expiresAt: Date.now() + 15000,'''.replace("        ", "", 0),
+              1,
+          )
+          card = card.replace(
+              '''        at: Date.now(),
+                    action,
+                    expiresAt: Date.now() + 5000,'''.replace("        ", "", 0),
+              '''        at: Date.now(),
+                    action,
+                    requestId,
+                    expiresAt: Date.now() + 5000,'''.replace("        ", "", 0),
+              1,
+          )
+          card_path.write_text(card, encoding="utf-8")
+
+      - name: Remove one-time workflow
+        run: |
+          git rm .github/workflows/apply-maintenance-notification-fix.yml
+          git rm .github/.maintenance-notification-fix-trigger
+
+      - name: Validate focused fix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install -r vps-monitor/requirements.txt
+          python3 -m unittest discover -s tests -v
+          python3 -m py_compile vps-monitor/vps_monitor.py
+          node --check home-assistant/www/vps-sentinel-apple-card.js
+          python3 - <<'PY'
+          import importlib.util
+          import json
+          import os
+          from pathlib import Path
+          from unittest.mock import patch
+
+          os.environ.setdefault("MQTT_HOST", "127.0.0.1")
+          path = Path("vps-monitor/vps_monitor.py")
+          spec = importlib.util.spec_from_file_location("monitor", path)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+
+          class Client:
+              def __init__(self):
+                  self.messages = []
+              def publish(self, topic, payload, **kwargs):
+                  self.messages.append((topic, json.loads(payload), kwargs))
+
+          client = Client()
+          controller = module.MaintenanceController(
+              client,
+              enabled=True,
+              clock=lambda: 1000,
+              wall_clock=lambda: 2000,
+          )
+          controller.last_started["refresh"] = 1000
+          payload = json.dumps({
+              "action": "refresh",
+              "request_id": "live-request",
+              "issued_at": 2000000,
+          })
+          assert controller.submit(payload) is False
+          topic, event, options = client.messages[-1]
+          assert topic == module.MAINTENANCE_EVENT
+          assert event["event_type"] == "cooldown"
+          assert event["request_id"] == "live-request"
+          assert options["retain"] is False
+
+          client.messages.clear()
+          with patch.object(module, "maintenance_result", return_value=(True, "完成")):
+              controller.last_started.clear()
+              controller._execute("refresh", "completed-request")
+          assert client.messages[0][0] == module.MAINTENANCE_STATE
+          assert client.messages[0][1]["state"] == "running"
+          assert client.messages[0][2]["retain"] is True
+          assert client.messages[1][0] == module.MAINTENANCE_EVENT
+          assert client.messages[1][1]["event_type"] == "success"
+          assert client.messages[1][1]["request_id"] == "completed-request"
+          assert client.messages[1][2]["retain"] is False
+          assert client.messages[2][1]["state"] == "idle"
+          assert client.messages[2][2]["retain"] is True
+
+          card = Path("home-assistant/www/vps-sentinel-apple-card.js").read_text()
+          assert "_matchingMaintenanceEvent" in card
+          assert "attributes.request_id !== request.requestId" in card
+          assert "!transientStates.has(backendState)" in card
+          assert "localStorage" not in card
+          PY
+          git diff --check
+
+      - name: Commit focused fix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: prevent stale maintenance notifications after reload"
+          git push origin HEAD:fix/maintenance-notification-replay
