@@ -1,5 +1,6 @@
 name: Prepare and publish v0.9.7
 
+# One-time workflow. It removes itself after publishing v0.9.7.
 on:
   push:
     branches:
