@@ -76,3 +76,12 @@ VPS Sentinel vX.Y.Z-rc.N
 - 避免「最佳化」、「大幅提升」等無法具體驗證的形容。
 - 不使用 GitHub 自動產生的 `What's Changed` 作為正式發布文案。
 - `CHANGELOG.md` 是唯一文案來源；GitHub Release 由發布流程擷取對應版本。
+
+## 發布 Gate
+
+- 只有合併到 `main` 且實際修改 `VERSION` 的 commit 才會進入發布流程。
+- 發布流程必須等待同一個 commit 的 `Validate` workflow 全部成功，不能與驗證平行搶先發布。
+- 正式版使用 `X.Y.Z`；候選版使用 `X.Y.Z-rc.N`，其中 `N` 從 1 開始。
+- 候選版必須建立為 GitHub prerelease；正式版不得帶 prerelease 標記。
+- checkout、tag、Release target 與驗證完成的 commit SHA 必須完全相同。
+- `VERSION`、Apple Card 版本與 `CHANGELOG.md` 對應標題不一致時禁止發布。
