@@ -68,7 +68,7 @@ jobs:
 
       - name: Scan Go source and binaries for known vulnerabilities
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          GOTOOLCHAIN=auto go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           cd go-agent
           govulncheck ./...
           cd ..
