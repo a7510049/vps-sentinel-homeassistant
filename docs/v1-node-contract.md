@@ -93,3 +93,9 @@ Controller 接收時必須依序檢查：
 4. 在切換前提供碰撞及 entity 遷移預覽。
 
 只有 adapter、契約測試與復原流程完成後，Production Agent 才會開始發布 v1 主題。
+
+## Phase 0 預覽開關
+
+安裝器會部署契約與相容模組，但預設寫入 `PUBLISH_V1_CONTRACT="false"`，因此穩定使用者不會多出任何 v1 訊息。開發測試環境可手動改為 `true` 並重新啟動服務，讓 Agent 在保留 0.9.x 主題的同時雙軌發布 `resources`、`health` 與 `metadata`。
+
+此開關目前不代表 1.0 已可用；availability、Controller 驗證、Discovery 接管與遷移預覽完成前不得在正式安裝預設啟用。
