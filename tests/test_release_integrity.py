@@ -110,7 +110,7 @@ class StabilityPreparationTests(unittest.TestCase):
         self.assertIn('release_title="VPS Sentinel v${VERSION}"', RELEASE)
         self.assertIn("printf '## %s\\n\\n'", RELEASE)
         self.assertIn("release_args+=(--prerelease)", RELEASE)
-        self.assertIn("-rc\\\.[1-9][0-9]*", RELEASE)
+        self.assertIn(r"(-rc\.[1-9][0-9]*)?", RELEASE)
         self.assertNotIn("--generate-notes", RELEASE)
 
     def test_changelog_version_headings_share_one_format(self):
