@@ -88,8 +88,16 @@ sudo vps-sentinel-enroll revoke tokyo-web-01
 
 Enrollment Store、password file 與 ACL 由同一流程更新。Broker 交易失敗時 Store 與 bundle 都會回復或移除，Controller 重新載入原本名冊。
 
+## 備份、復原與移除
+
+`sudo vps-sentinel backup` 的 format 3 備份會一起保存 Home Assistant 設定、本機 Agent、Controller 環境、Enrollment Store、Mosquitto password／ACL／config 與 Fleet Card。復原前會先建立目前狀態的安全備份；Controller、Agent、Broker 或 Home Assistant 任一驗證失敗時，自動回復復原前狀態。
+
+完整移除會一併停止並移除 Controller、Enrollment Store、Fleet Card、專用 MQTT 帳號與 ACL；若 Broker 密碼檔仍有其他服務帳號，會保留 Broker 設定，避免影響共用服務。只移除本機 Agent 時不會碰 Controller 與名冊。
+
+`sudo vps-sentinel upgrade` 會先辨識目前是 agent、controller 或 combined，下載後同時驗證兩套 Python 程式與前端檔案，再建立同版本快照。Controller、Agent 或 MQTT 任一驗證失敗，會回復程式、systemd service、維護命令、依賴與兩張前端卡片；controller-only 主機不再被誤判為安裝不完整。
+
 ## 尚待完成
 
 - 非互動 combined／controller JSON 設定與完整 preflight report。
 - Fleet Card Home Assistant resource 自動註冊。
-- Controller／Agent／combined 的升級、備份、復原與移除端到端測試。
+- Controller／Agent／combined 的實機復原與長時間穩定性驗證。

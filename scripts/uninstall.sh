@@ -20,6 +20,13 @@ readonly AUTOMATIONS_COMMAND="/usr/local/sbin/vps-sentinel-automations"
 readonly APPLE_COMMAND="/usr/local/sbin/vps-sentinel-apple"
 readonly SETTINGS_BACKUP_DIR="/opt/vps-sentinel-backups"
 readonly REPORT_DIR="/root/vps-sentinel-reports"
+readonly CONTROLLER_DIR="/opt/vps-sentinel-controller"
+readonly CONTROLLER_DATA="/var/lib/vps-sentinel-controller"
+readonly CONTROLLER_ENV="/etc/vps-sentinel-controller.env"
+readonly CONTROLLER_SERVICE="/etc/systemd/system/vps-sentinel-controller.service"
+readonly ENROLL_COMMAND="/usr/local/sbin/vps-sentinel-enroll"
+readonly MQTT_ACL="/etc/mosquitto/vps-sentinel.acl"
+readonly FLEET_CARD="/opt/homeassistant/config/www/vps-sentinel-fleet-card.js"
 
 green()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 yellow() { printf '\033[1;33m⚠ %s\033[0m\n' "$*"; }
@@ -52,7 +59,8 @@ remove_tree() {
   local target="$1"
   case "${target}" in
     "${HA_DIR}"|"${BACKUP_DIR}"|"${MONITOR_DIR}"|"${MONITOR_BACKUP_DIR}"|\
-    "${SETTINGS_BACKUP_DIR}"|"${REPORT_DIR}")
+    "${SETTINGS_BACKUP_DIR}"|"${REPORT_DIR}"|"${CONTROLLER_DIR}"|\
+    "${CONTROLLER_DATA}")
       rm -rf -- "${target}"
       ;;
     *)
@@ -60,6 +68,20 @@ remove_tree() {
       return 1
       ;;
   esac
+}
+
+remove_controller() {
+  systemctl disable --now vps-sentinel-controller >/dev/null 2>&1 || true
+  rm -f -- "${CONTROLLER_SERVICE}" "${CONTROLLER_ENV}" "${ENROLL_COMMAND}" \
+    "${FLEET_CARD}"
+  remove_tree "${CONTROLLER_DIR}"
+  remove_tree "${CONTROLLER_DATA}"
+  systemctl daemon-reload
+  systemctl reset-failed vps-sentinel-controller >/dev/null 2>&1 || true
+  if id -u vps-sentinel-controller >/dev/null 2>&1; then
+    userdel vps-sentinel-controller >/dev/null 2>&1 || true
+  fi
+  green "Controller、節點名冊、Fleet Card 與 systemd 服務已移除"
 }
 
 remove_monitor() {
@@ -82,6 +104,11 @@ create_final_backup() {
     opt/homeassistant \
     opt/homeassistant-backups \
     etc/vps-monitor.env \
+    etc/vps-sentinel-controller.env \
+    opt/vps-sentinel-controller \
+    var/lib/vps-sentinel-controller \
+    etc/systemd/system/vps-sentinel-controller.service \
+    etc/mosquitto/vps-sentinel.acl \
     root/vps-homeassistant-credentials.txt \
     etc/mosquitto/conf.d/home-assistant.conf \
     etc/mosquitto/passwd; do
@@ -120,13 +147,23 @@ remove_home_assistant() {
 }
 
 remove_mqtt_settings() {
-  local candidate mqtt_shared=false
+  local candidate username mqtt_shared=false
+  local -a sentinel_users=()
   if command -v mosquitto_passwd >/dev/null 2>&1 &&
      [[ -f "${MQTT_PASSWD}" ]]; then
     mosquitto_passwd -D "${MQTT_PASSWD}" home-assistant \
       >/dev/null 2>&1 || true
     mosquitto_passwd -D "${MQTT_PASSWD}" vps-monitor \
       >/dev/null 2>&1 || true
+    while IFS=: read -r username _; do
+      case "${username}" in
+        vps-controller|vps-node-*) sentinel_users+=("${username}") ;;
+      esac
+    done < "${MQTT_PASSWD}"
+    for username in "${sentinel_users[@]}"; do
+      mosquitto_passwd -D "${MQTT_PASSWD}" "${username}" \
+        >/dev/null 2>&1 || true
+    done
     if ! grep -Eq '^[^#[:space:]][^:]*:' "${MQTT_PASSWD}"; then
       rm -f -- "${MQTT_PASSWD}"
     else
@@ -136,7 +173,7 @@ remove_mqtt_settings() {
   if [[ "${mqtt_shared}" == "true" ]]; then
     yellow "MQTT 密碼檔仍有其他帳號，保留 Broker 設定以免影響其他服務"
   else
-    rm -f -- "${MQTT_CONF}"
+    rm -f -- "${MQTT_CONF}" "${MQTT_ACL}"
     for candidate in "${MQTT_CONF}".backup.*; do
       [[ -e "${candidate}" ]] && rm -f -- "${candidate}"
     done
@@ -235,8 +272,8 @@ BANNER
 printf '\033[0m'
 echo
 echo "請選擇移除範圍："
-echo "  1. 只移除監控服務"
-echo "     保留 Home Assistant、MQTT 與 Tailscale"
+echo "  1. 只移除本機 Agent"
+echo "     保留 Controller、Home Assistant、MQTT 與 Tailscale"
 echo
 echo "  2. 完整移除 VPS Sentinel"
 echo "     包含本專案建立的設定、歷史資料與自動備份"
@@ -250,7 +287,7 @@ case "${choice}" in
   1)
     remove_monitor
     echo
-    green "移除完成。Home Assistant、MQTT 與 Tailscale 不受影響。"
+    green "本機 Agent 已移除。Controller、Home Assistant、MQTT 與 Tailscale 不受影響。"
     ;;
   2)
     echo
@@ -268,12 +305,13 @@ case "${choice}" in
     [[ "${keep_backup}" == "true" ]] && create_final_backup
 
     remove_monitor
+    remove_controller
     remove_home_assistant
     remove_mqtt_settings
     remove_tailscale_serve
     rm -f -- "${CREDENTIALS_FILE}" "${UPDATE_COMMAND}" "${MANAGE_COMMAND}" \
       "${UPGRADE_COMMAND}" "${DOCTOR_COMMAND}" "${BACKUP_COMMAND}" \
-      "${AUTOMATIONS_COMMAND}" "${APPLE_COMMAND}"
+      "${AUTOMATIONS_COMMAND}" "${APPLE_COMMAND}" "${ENROLL_COMMAND}"
     remove_tree "${SETTINGS_BACKUP_DIR}"
     remove_tree "${REPORT_DIR}"
 
