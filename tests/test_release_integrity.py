@@ -46,9 +46,12 @@ class StabilityPreparationTests(unittest.TestCase):
     def test_backup_includes_compose_and_mqtt_identity(self):
         self.assertIn('${HA_DIR}/compose.yaml', BACKUP)
         self.assertIn('readonly MQTT_PASSWD="/etc/mosquitto/passwd"', BACKUP)
-        self.assertIn('echo "format=2"', BACKUP)
+        self.assertIn('echo "format=3"', BACKUP)
         self.assertIn("mqtt_probe", BACKUP)
-        self.assertIn("format=(1|2)", BACKUP)
+        self.assertIn("format=(1|2|3)", BACKUP)
+        self.assertIn("CONTROLLER_ENV", BACKUP)
+        self.assertIn("CONTROLLER_DATA", BACKUP)
+        self.assertIn("MQTT_ACL", BACKUP)
 
     def test_doctor_uses_live_mqtt_probe_and_safe_repairs(self):
         self.assertIn("mosquitto_sub", DOCTOR)
