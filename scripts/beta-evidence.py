@@ -17,7 +17,7 @@ import time
 
 
 SCHEMA_VERSION = 1
-COLLECTOR_VERSION = "1.0.0-alpha.1"
+COLLECTOR_VERSION = "1.0.0-alpha.2"
 AGENT_ENV = "/etc/vps-monitor.env"
 CONTROLLER_ENV = "/etc/vps-sentinel-controller.env"
 COMPONENT_PATHS = {
@@ -294,7 +294,10 @@ def controller_probe(root):
     return mqtt_probe(environment, [topic], accept)
 
 
-def collect(root="/", expected_role="auto", live=True, provider="", region=""):
+def collect(
+    root="/", expected_role="auto", live=True, provider="", region="",
+    build_ref="",
+):
     components = detected_components(root)
     role = detected_role(components)
     checks = []
@@ -362,6 +365,7 @@ def collect(root="/", expected_role="auto", live=True, provider="", region=""):
     return {
         "schema_version": SCHEMA_VERSION,
         "collector_version": COLLECTOR_VERSION,
+        "build_ref": build_ref or None,
         "collected_at": utc_timestamp(),
         "host": {
             "fingerprint": host_fingerprint(root),
@@ -415,6 +419,11 @@ def main():
     )
     parser.add_argument("--provider", default="")
     parser.add_argument("--region", default="")
+    parser.add_argument(
+        "--build-ref",
+        default="",
+        help="受測 commit SHA 或 Beta tag；建立正式驗收證據時必填",
+    )
     parser.add_argument("--root", default="/", help=argparse.SUPPRESS)
     parser.add_argument("--no-live", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--output")
@@ -437,6 +446,7 @@ def main():
         live=live,
         provider=args.provider,
         region=args.region,
+        build_ref=args.build_ref,
     )
     report_path, checksum_path = write_report(report, output)
     print(f"證據報告：{report_path}")

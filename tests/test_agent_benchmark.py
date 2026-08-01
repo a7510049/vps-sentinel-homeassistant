@@ -58,6 +58,8 @@ class AgentBenchmarkTests(unittest.TestCase):
         payload = {
             "schema_version": 1,
             "name": name,
+            "version": "1.0.0-rc.1",
+            "build_ref": "0123456789abcdef",
             "status": "completed",
             "measurement_complete": True,
             "requested_duration_seconds": 86400,

@@ -84,8 +84,10 @@ class BetaEvidenceTests(unittest.TestCase):
                 live=False,
                 provider="Example Cloud",
                 region="test-region",
+                build_ref="0123456789abcdef",
             )
             self.assertEqual(report["detected_role"], expected)
+            self.assertEqual(report["build_ref"], "0123456789abcdef")
             self.assertEqual(report["summary"]["result"], "INCOMPLETE")
             self.assertEqual(report["summary"]["failed"], 0)
             self.assertEqual(report["host"]["memory_mib"], 1024)

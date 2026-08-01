@@ -70,6 +70,8 @@ repository 內的 `go-agent/` 是受限原型，不是正式安裝預設。Go �
 ```bash
 sudo systemctl stop vps-monitor
 sudo install -d -m 0700 /root/vps-sentinel-benchmarks
+VERSION="1.0.0-rc.1"
+BUILD_REF="<受測 commit SHA 或 Beta tag>"
 ```
 
 每次指令會先暖機 30 分鐘，再串流寫入 24 小時 CSV；提前退出、採樣失敗或量測不足不會被標成完成：
@@ -77,6 +79,7 @@ sudo install -d -m 0700 /root/vps-sentinel-benchmarks
 ```bash
 sudo python3 benchmarks/agent_benchmark.py \
   --name python \
+  --version "${VERSION}" --build-ref "${BUILD_REF}" \
   --command "/opt/vps-monitor/venv/bin/python /opt/vps-monitor/vps_monitor.py" \
   --env-file /etc/vps-monitor.env \
   --warmup 1800 --duration 86400 \
@@ -84,6 +87,7 @@ sudo python3 benchmarks/agent_benchmark.py \
 
 sudo python3 benchmarks/agent_benchmark.py \
   --name go \
+  --version "${VERSION}" --build-ref "${BUILD_REF}" \
   --command "./go-agent" \
   --env-file /etc/vps-monitor.env \
   --warmup 1800 --duration 86400 \
@@ -99,7 +103,7 @@ sudo python3 benchmarks/compare_agent_benchmarks.py \
   --output /root/vps-sentinel-benchmarks/comparison.json
 ```
 
-比較器會拒絕少於三輪、未完成 24 小時、不同主機或不同架構的資料。它只能判斷 RSS 資源門檻，最終決策仍須通過本 ADR 的契約、雙架構、可靠性、升級回復、SBOM／漏洞掃描與維護性條件。完成後使用 `sudo systemctl start vps-monitor` 恢復正式 Agent。
+比較器會拒絕少於三輪、未完成 24 小時、不同主機、不同架構、不同版本或不同 build ref 的資料。摘要內的 CSV／日誌路徑採相對路徑，整個證據目錄可以安全搬移後再驗證。它只能判斷 RSS 資源門檻，最終決策仍須通過本 ADR 的契約、雙架構、可靠性、升級回復、SBOM／漏洞掃描與維護性條件。完成後使用 `sudo systemctl start vps-monitor` 恢復正式 Agent。
 
 每個 Agent 分開執行、相同環境變數與 Broker，依本 ADR 重複三次。原始 CSV 不可只保留摘要；未完成 24 小時實機樣本與故障注入前，不得把 Go 設為預設。
 
