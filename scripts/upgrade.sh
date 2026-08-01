@@ -231,7 +231,8 @@ green "舊版本已備份：${backup}"
 rollback() {
   trap - ERR
   red "新版本未能通過完整驗證，正在回復 ${current_version}。"
-  install -m 0755 "${backup}/vps_monitor.py" \
+  if [[ "${has_agent}" == "true" ]]; then
+    install -m 0755 "${backup}/vps_monitor.py" \
     "${INSTALL_DIR}/vps_monitor.py"
   for module in node_contract.py legacy_adapter.py; do
     if [[ -f "${backup}/${module}" ]]; then
@@ -247,11 +248,12 @@ rollback() {
       "${INSTALL_DIR}/.requirements.sha256"
   [[ ! -f "${backup}/.version" ]] ||
     install -m 0644 "${backup}/.version" "${INSTALL_DIR}/.version"
-  if [[ -f "${backup}/vps-sentinel-apple-card.js" ]]; then
-    install -m 0644 "${backup}/vps-sentinel-apple-card.js" \
-      "${INSTALL_DIR}/vps-sentinel-apple-card.js"
-  else
-    rm -f -- "${INSTALL_DIR}/vps-sentinel-apple-card.js"
+    if [[ -f "${backup}/vps-sentinel-apple-card.js" ]]; then
+      install -m 0644 "${backup}/vps-sentinel-apple-card.js" \
+        "${INSTALL_DIR}/vps-sentinel-apple-card.js"
+    else
+      rm -f -- "${INSTALL_DIR}/vps-sentinel-apple-card.js"
+    fi
   fi
   if [[ -f "${backup}/homeassistant-fleet-card.js" ]]; then
     install -d -m 0755 "$(dirname "${FLEET_CARD_TARGET}")"

@@ -106,6 +106,7 @@ jobs:
           tests/test_node_registry.py
           tests/test_v1_publisher.py
           tests/test_unified_installer.py
+          tests/test_upgrade_roles.py
           tests/test_vps_monitor.py
           tests/test_command_interface.py
           tests/test_combined_migration.py

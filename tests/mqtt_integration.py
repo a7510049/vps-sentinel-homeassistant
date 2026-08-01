@@ -237,6 +237,8 @@ def main():
                         item
                         for item in reversed(fleets)
                         if item.get("node_count") == 3
+                        and item.get("online_count") == 3
+                        and item.get("problem_count") == 0
                     ),
                     None,
                 )
