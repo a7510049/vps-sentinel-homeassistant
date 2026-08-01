@@ -92,6 +92,7 @@ jobs:
           vps-monitor/node_contract.py
           vps-monitor/legacy_adapter.py
           scripts/beta-evidence.py
+          tests/test_agent_benchmark.py
           tests/test_apply_agent_config.py
           tests/test_beta_evidence.py
           tests/test_broker_policy.py
@@ -117,6 +118,7 @@ jobs:
           tests/test_restore_roles.py
           tests/validate_go_agent_output.py
           benchmarks/agent_benchmark.py
+          benchmarks/compare_agent_benchmarks.py
 
       - name: Check moved script references
         run: |
