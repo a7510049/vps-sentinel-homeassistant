@@ -282,9 +282,9 @@ def run_benchmark(args):
         "cpu_percent": metric_summary(cpu_values),
         "process_exit_code": process.returncode,
         "terminated_by_harness": terminated_by_harness,
-        "raw_csv": str(Path(output).relative_to(summary_path.parent)),
+        "raw_csv": os.path.relpath(output, summary_path.parent),
         "raw_csv_sha256": sha256(output),
-        "raw_log": str(Path(log_path).relative_to(summary_path.parent)),
+        "raw_log": os.path.relpath(log_path, summary_path.parent),
         "raw_log_sha256": sha256(log_path),
         "environment_file_used": bool(args.env_file),
         "host": {
