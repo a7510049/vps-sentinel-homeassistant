@@ -109,6 +109,7 @@ jobs:
           tests/test_vps_monitor.py
           tests/test_command_interface.py
           tests/test_combined_migration.py
+          tests/mqtt_integration.py
           tests/test_release_integrity.py
           tests/validate_go_agent_output.py
           benchmarks/agent_benchmark.py
@@ -128,3 +129,22 @@ jobs:
           else
             git diff --check HEAD^ HEAD
           fi
+
+  mqtt-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Mosquitto
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mosquitto mosquitto-clients
+
+      - name: Install integration dependencies
+        run: >-
+          python3 -m pip install
+          -r vps-monitor/requirements.txt
+          -r controller/requirements.txt
+
+      - name: Run three-node MQTT integration
+        run: python3 tests/mqtt_integration.py
