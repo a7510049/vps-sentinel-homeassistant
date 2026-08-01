@@ -45,10 +45,12 @@ jobs:
       - name: Check Python syntax
         run: >-
           python3 -m py_compile
+          controller/enrollment.py
           controller/node_registry.py
           vps-monitor/vps_monitor.py
           vps-monitor/node_contract.py
           vps-monitor/legacy_adapter.py
+          tests/test_enrollment.py
           tests/test_legacy_adapter.py
           tests/test_node_contract.py
           tests/test_node_registry.py
