@@ -212,6 +212,27 @@ class BrokerPolicyTests(unittest.TestCase):
                 acl_text="user home-assistant\ntopic readwrite #\n",
             )
 
+    def test_removing_absent_username_is_idempotent(self):
+        runner = FakePasswordRunner()
+        transaction = self.transaction(runner, lambda: True)
+        transaction.password_file.parent.mkdir(parents=True)
+        transaction.password_file.write_text(
+            "home-assistant:HASHED\n",
+            encoding="utf-8",
+        )
+
+        transaction.apply(
+            credentials={},
+            remove_usernames=["vps-monitor"],
+            acl_text="user home-assistant\ntopic readwrite #\n",
+        )
+
+        self.assertEqual(
+            transaction.password_file.read_text(encoding="utf-8"),
+            "home-assistant:HASHED\n",
+        )
+        self.assertFalse(any("-D" in command for command in runner.commands))
+
 
 if __name__ == "__main__":
     unittest.main()
