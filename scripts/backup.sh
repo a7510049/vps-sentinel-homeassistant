@@ -187,14 +187,15 @@ create_backup() {
   archive="${BACKUP_ROOT}/settings-${timestamp}.tar.gz"
   trap 'rm -rf -- "${staging}"' RETURN
 
-  install -d -m 0700 "${staging}/homeassistant/config" \
-    "${staging}/monitor" "${staging}/mosquitto" \
-    "${staging}/controller"
+  install -d -m 0700 "${staging}/monitor" \
+    "${staging}/mosquitto" "${staging}/controller"
   compose="$(compose_path)"
   if [[ -n "${compose}" ]]; then
+    install -d -m 0700 "${staging}/homeassistant"
     cp -a "${compose}" "${staging}/homeassistant/compose.yaml"
   fi
   if [[ -d "${HA_DIR}/config" ]]; then
+    install -d -m 0700 "${staging}/homeassistant/config"
     tar -C "${HA_DIR}/config" \
       --exclude='home-assistant_v2.db*' \
       --exclude='home-assistant.log*' \

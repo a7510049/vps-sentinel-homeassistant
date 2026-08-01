@@ -8,6 +8,10 @@ VALIDATE = BACKUP.split("start_and_validate() {", 1)[1].split(
     "\n}\n\nlist_backups()",
     1,
 )[0]
+CREATE = BACKUP.split("create_backup() {", 1)[1].split(
+    "\n}\n\nrestore_backup()",
+    1,
+)[0]
 
 
 class RestoreRoleMatrixTests(unittest.TestCase):
@@ -44,6 +48,22 @@ class RestoreRoleMatrixTests(unittest.TestCase):
         self.assertNotIn("home_assistant", roles["agent"])
         self.assertNotIn("broker", roles["agent"])
         self.assertIn("agent", roles["agent"])
+
+    def test_agent_backup_does_not_create_a_phantom_home_assistant_tree(self):
+        initial_directories = CREATE.split('compose="$(compose_path)"', 1)[0]
+        self.assertNotIn('homeassistant/config', initial_directories)
+
+        compose_block = CREATE.split(
+            'if [[ -n "${compose}" ]]; then',
+            1,
+        )[1].split("fi", 1)[0]
+        self.assertIn('"${staging}/homeassistant"', compose_block)
+
+        config_block = CREATE.split(
+            'if [[ -d "${HA_DIR}/config" ]]; then',
+            1,
+        )[1].split("\n  fi", 1)[0]
+        self.assertIn('"${staging}/homeassistant/config"', config_block)
 
     def test_empty_archive_cannot_report_success(self):
         self.assertIn('[[ "${has_component}" == "true" ]] || return 1', VALIDATE)
