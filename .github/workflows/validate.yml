@@ -80,6 +80,7 @@ jobs:
           tests/test_unified_installer.py
           tests/test_vps_monitor.py
           tests/test_command_interface.py
+          tests/test_combined_migration.py
           tests/test_release_integrity.py
 
       - name: Check moved script references
