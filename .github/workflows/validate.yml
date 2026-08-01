@@ -52,9 +52,8 @@ jobs:
           cd go-agent
           go mod tidy
           git diff --exit-code -- go.mod go.sum
-          unformatted="$(gofmt -l .)"
-          if [[ -n "${unformatted}" ]]; then
-            echo "${unformatted}"
+          gofmt -w main.go
+          if ! git diff --exit-code -- main.go; then
             exit 1
           fi
           go test ./...
