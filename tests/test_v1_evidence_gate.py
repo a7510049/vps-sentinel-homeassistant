@@ -226,6 +226,23 @@ class V1EvidenceGateTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     gate.verify(evidence, soak, python, go, VERSION, BUILD_REF)
 
+    def test_rejects_missing_or_changed_soak_artifacts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence, soak, python, go = self.make_bundle(temporary)
+            with self.assertRaisesRegex(ValueError, "every agent evidence"):
+                gate.verify(
+                    evidence, soak[:2], python, go, VERSION, BUILD_REF,
+                )
+
+            evidence, soak, python, go = self.make_bundle(temporary)
+            payload = json.loads(soak[0].read_text(encoding="utf-8"))
+            csv_path = soak[0].parent / payload["raw_csv"]
+            csv_path.write_text("changed\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "missing or changed"):
+                gate.verify(
+                    evidence, soak, python, go, VERSION, BUILD_REF,
+                )
+
     def test_private_summary_has_matching_checksum(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "gate.json"
