@@ -63,7 +63,7 @@
 
 ## 可重現實驗工具
 
-repository 內的 `go-agent/` 是受限原型，不是正式安裝預設。CI 會執行 Go 測試、`go vet`、官方 `govulncheck` 原始碼／雙架構 binary 掃描、靜態建置 amd64／arm64、checksum 與各架構 SPDX 2.3 SBOM，並把 `--once` 輸出交由現有 Python `validate_envelope` 驗證，避免兩套語言各自解釋契約。任一漏洞掃描、SBOM 或契約步驟失敗，都不得把 Go 設為預設。
+repository 內的 `go-agent/` 是受限原型，不是正式安裝預設。Go 工具鏈最低為 1.25.12；1.24.0 已被 `govulncheck` 證明存在可達的標準函式庫 TLS／X.509／URL 等漏洞，因此不得再用於候選產物或效能基準。CI 會執行 Go 測試、`go vet`、官方 `govulncheck` 原始碼／雙架構 binary 掃描、靜態建置 amd64／arm64、checksum 與各架構 SPDX 2.3 SBOM，並把 `--once` 輸出交由現有 Python `validate_envelope` 驗證，避免兩套語言各自解釋契約。任一漏洞掃描、SBOM 或契約步驟失敗，都不得把 Go 設為預設。
 
 長時間比較前先停止正式 Agent，避免兩個程序使用相同 node credential：
 
