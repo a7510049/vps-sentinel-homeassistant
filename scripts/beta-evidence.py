@@ -4,6 +4,7 @@
 import argparse
 from datetime import datetime, timezone
 import hashlib
+import hmac
 import importlib.util
 import json
 import os
@@ -27,9 +28,6 @@ COMPONENT_PATHS = {
     "broker_config": "/etc/mosquitto/conf.d/home-assistant.conf",
     "broker_acl": "/etc/mosquitto/vps-sentinel.acl",
 }
-SECRET_KEYS = {"MQTT_PASSWORD", "PASSWORD", "SECRET", "TOKEN"}
-
-
 def utc_timestamp():
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -81,13 +79,23 @@ def detected_role(components):
     return "unknown"
 
 
+def host_secret(root):
+    value = read_text(rooted(root, "/etc/machine-id")).strip()
+    return value or platform.node()
+
+
 def host_fingerprint(root):
-    machine_id = read_text(rooted(root, "/etc/machine-id")).strip()
-    if not machine_id:
-        machine_id = platform.node()
     return hashlib.sha256(
-        ("vps-sentinel-beta:" + machine_id).encode("utf-8")
+        ("vps-sentinel-beta:" + host_secret(root)).encode("utf-8")
     ).hexdigest()[:16]
+
+
+def identity_fingerprint(root, value):
+    return hmac.new(
+        host_secret(root).encode("utf-8"),
+        value.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()[:12]
 
 
 def os_name(root):
@@ -146,7 +154,11 @@ def file_check(root, path, expected_modes):
 
 
 def ensure_mqtt_dependency():
-    if importlib.util.find_spec("paho.mqtt.client") is not None:
+    try:
+        available = importlib.util.find_spec("paho.mqtt.client") is not None
+    except ModuleNotFoundError:
+        available = False
+    if available:
         return
     if os.environ.get("VPS_SENTINEL_EVIDENCE_REEXEC") == "1":
         return
@@ -264,9 +276,10 @@ def controller_probe(root):
         if candidate.get("schema_version") != "1.0":
             return None
         node_hashes = sorted(
-            hashlib.sha256(
-                item.get("node", {}).get("id", "").encode("utf-8")
-            ).hexdigest()[:12]
+            identity_fingerprint(
+                root,
+                item.get("node", {}).get("id", ""),
+            )
             for item in candidate.get("nodes", [])
             if item.get("node", {}).get("id")
         )
@@ -317,10 +330,11 @@ def collect(root="/", expected_role="auto", live=True, provider="", region=""):
 
     if live:
         for service in required_services:
+            active = service_active(service)
             add(
                 f"service_{service}",
-                service_active(service),
-                "active" if service_active(service) else "inactive",
+                active,
+                "active" if active else "inactive",
             )
         if components["agent"]:
             ok, detail = agent_probe(root)
