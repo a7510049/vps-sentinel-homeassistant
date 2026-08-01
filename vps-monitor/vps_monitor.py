@@ -18,6 +18,7 @@ import psutil
 import paho.mqtt.client as mqtt
 
 from legacy_adapter import (
+    LegacyCompatibilityError,
     health_envelope,
     legacy_capabilities,
     metadata_envelope,
