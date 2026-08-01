@@ -8,7 +8,8 @@ readonly SERVICE_FILE="/etc/systemd/system/vps-sentinel-controller.service"
 readonly SERVICE_USER="vps-sentinel-controller"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
-readonly SHARED_DIR="$(cd -- "${SCRIPT_DIR}/../vps-monitor" && pwd)"
+SHARED_DIR="$(cd -- "${SCRIPT_DIR}/../vps-monitor" && pwd)"
+readonly SHARED_DIR
 
 red() { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
