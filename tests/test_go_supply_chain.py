@@ -10,9 +10,15 @@ WORKFLOW = (
 ADR = (
     ROOT / "docs" / "adr" / "0002-go-agent-evaluation.md"
 ).read_text(encoding="utf-8")
+GO_MOD = (ROOT / "go-agent" / "go.mod").read_text(encoding="utf-8")
 
 
 class GoSupplyChainTests(unittest.TestCase):
+    def test_go_toolchain_uses_the_scanned_security_floor(self):
+        self.assertIn("go 1.25.12", GO_MOD)
+        self.assertIn("最低為 1.25.12", ADR)
+        self.assertNotIn("go 1.24.0", GO_MOD)
+
     def test_vulnerability_scanner_is_version_pinned(self):
         self.assertIn(
             "golang.org/x/vuln/cmd/govulncheck@v1.6.0",
