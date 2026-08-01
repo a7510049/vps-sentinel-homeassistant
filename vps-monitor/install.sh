@@ -42,7 +42,8 @@ if [[ ! -t 0 ]]; then
   exit 1
 fi
 
-for required in vps_monitor.py requirements.txt vps-monitor.service; do
+for required in vps_monitor.py node_contract.py legacy_adapter.py \
+  requirements.txt vps-monitor.service; do
   if [[ ! -f "${SCRIPT_DIR}/${required}" ]]; then
     error "找不到 ${required}。請在完整的 vps-monitor 目錄中執行 install.sh。"
     exit 1
@@ -252,6 +253,7 @@ if [[ "${configure}" == "true" ]]; then
     printf 'WATCH_SERVICES=%s\n' "$(env_value "${services}")"
     printf 'ALLOW_REMOTE_ACTIONS=%s\n' "$(env_value "${remote_actions}")"
     printf 'COMMAND_COOLDOWN=%s\n' '"300"'
+    printf 'PUBLISH_V1_CONTRACT=%s\n' '"false"'
   } > "${ENV_FILE}"
   chmod 0600 "${ENV_FILE}"
   ok "安全設定檔已建立（權限 600）"
@@ -267,6 +269,8 @@ apt-get install -y --no-install-recommends \
 
 install -d -m 0755 "${INSTALL_DIR}"
 install -m 0755 "${SCRIPT_DIR}/vps_monitor.py" "${INSTALL_DIR}/vps_monitor.py"
+install -m 0644 "${SCRIPT_DIR}/node_contract.py" "${INSTALL_DIR}/node_contract.py"
+install -m 0644 "${SCRIPT_DIR}/legacy_adapter.py" "${INSTALL_DIR}/legacy_adapter.py"
 install -m 0644 "${SCRIPT_DIR}/requirements.txt" "${INSTALL_DIR}/requirements.txt"
 requirements_hash="$(sha256sum "${INSTALL_DIR}/requirements.txt" | awk '{print $1}')"
 installed_hash="$(cat "${INSTALL_DIR}/.requirements.sha256" 2>/dev/null || true)"
