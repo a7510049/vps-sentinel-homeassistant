@@ -18,10 +18,10 @@ jobs:
           fetch-depth: 0
 
       - name: Check shell syntax
-        run: bash -n setup.sh scripts/*.sh vps-monitor/install.sh
+        run: bash -n setup.sh scripts/*.sh vps-monitor/install.sh controller/*.sh
 
       - name: Run ShellCheck
-        run: shellcheck setup.sh scripts/*.sh vps-monitor/install.sh
+        run: shellcheck setup.sh scripts/*.sh vps-monitor/install.sh controller/*.sh
 
       - name: Check dashboard card syntax
         run: >-
@@ -39,7 +39,10 @@ jobs:
           YAML.parse(dashboard.gsub("${vps_id}", "demo"))'
 
       - name: Install Python dependencies
-        run: python3 -m pip install -r vps-monitor/requirements.txt
+        run: >-
+          python3 -m pip install
+          -r vps-monitor/requirements.txt
+          -r controller/requirements.txt
 
       - name: Run Python tests
         run: python3 -m unittest discover -s tests -v
@@ -54,6 +57,7 @@ jobs:
           vps-monitor/node_contract.py
           vps-monitor/legacy_adapter.py
           tests/test_controller.py
+          tests/test_controller_install.py
           tests/test_enrollment.py
           tests/test_fleet_card.py
           tests/test_legacy_adapter.py
