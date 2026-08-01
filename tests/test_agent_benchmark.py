@@ -51,6 +51,10 @@ class AgentBenchmarkTests(unittest.TestCase):
             self.assertEqual(values["MQTT_PASSWORD"], "secret-value")
 
     def make_summary(self, root, name, index, rss_p95, cpu_p95=1.0):
+        csv_path = Path(root) / f"{name}-{index}.csv"
+        log_path = Path(root) / f"{name}-{index}.log"
+        csv_path.write_text("sample\n", encoding="utf-8")
+        log_path.write_text("agent log\n", encoding="utf-8")
         payload = {
             "schema_version": 1,
             "name": name,
@@ -69,6 +73,10 @@ class AgentBenchmarkTests(unittest.TestCase):
                 "p95": cpu_p95,
                 "max": cpu_p95 * 1.2,
             },
+            "raw_csv": str(csv_path),
+            "raw_csv_sha256": benchmark.sha256(csv_path),
+            "raw_log": str(log_path),
+            "raw_log_sha256": benchmark.sha256(log_path),
             "host": {
                 "fingerprint": "0123456789abcdef",
                 "architecture": "x86_64",
@@ -122,6 +130,24 @@ class AgentBenchmarkTests(unittest.TestCase):
             payload["actual_measurement_seconds"] = 100
             go[0].write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "24-hour"):
+                comparison.compare(python, go)
+
+    def test_comparison_rejects_changed_raw_artifact(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            python = [
+                self.make_summary(temporary, "python", index, 100)
+                for index in range(1, 4)
+            ]
+            go = [
+                self.make_summary(temporary, "go", index, 60)
+                for index in range(1, 4)
+            ]
+            payload = json.loads(go[0].read_text(encoding="utf-8"))
+            Path(payload["raw_csv"]).write_text(
+                "changed\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "changed raw_csv"):
                 comparison.compare(python, go)
 
     def test_comparison_report_is_private(self):
