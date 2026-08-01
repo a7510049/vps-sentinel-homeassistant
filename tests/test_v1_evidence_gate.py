@@ -97,6 +97,44 @@ class V1EvidenceGateTests(unittest.TestCase):
         path.write_text(json.dumps(payload), encoding="utf-8")
         return path
 
+    def make_soak(self, root, name, fingerprint):
+        base = Path(root)
+        csv_path = base / f"{name}.soak.csv"
+        csv_path.write_text("sample\n", encoding="utf-8")
+        stable = {
+            "boot_fingerprint": "1111111111111111",
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 1234,
+            "n_restarts": 0,
+        }
+        summary = {
+            "schema_version": 1,
+            "name": "python-agent-seven-day-soak",
+            "version": VERSION,
+            "build_ref": BUILD_REF,
+            "status": "completed",
+            "failure": None,
+            "measurement_complete": True,
+            "qualifies_for_seven_day_gate": True,
+            "requested_duration_seconds": 604800,
+            "actual_measurement_seconds": 604800,
+            "interval_seconds": 60,
+            "samples": 10081,
+            "baseline": stable,
+            "final": stable,
+            "raw_csv": csv_path.name,
+            "raw_csv_sha256": gate.sha256(csv_path),
+            "host": {
+                "fingerprint": fingerprint,
+                "architecture": "x86_64",
+            },
+        }
+        path = base / f"{name}.soak.summary.json"
+        path.write_text(json.dumps(summary), encoding="utf-8")
+        self.write_checksum(path)
+        return path
+
     def make_bundle(self, root):
         evidence = [
             self.make_evidence(
@@ -116,6 +154,14 @@ class V1EvidenceGateTests(unittest.TestCase):
                 "Home", "taiwan", "x86_64", "controller",
             ),
         ]
+        soak = [
+            self.make_soak(
+                root,
+                f"agent-{index}",
+                f"{index:016x}",
+            )
+            for index in range(1, 4)
+        ]
         python = [
             self.make_benchmark(root, "python", index, 100)
             for index in range(1, 4)
@@ -124,13 +170,13 @@ class V1EvidenceGateTests(unittest.TestCase):
             self.make_benchmark(root, "go", index, 60)
             for index in range(1, 4)
         ]
-        return evidence, python, go
+        return evidence, soak, python, go
 
     def test_complete_bundle_passes_without_claiming_manual_gates(self):
         with tempfile.TemporaryDirectory() as temporary:
-            evidence, python, go = self.make_bundle(temporary)
+            evidence, soak, python, go = self.make_bundle(temporary)
             report = gate.verify(
-                evidence, python, go, VERSION, BUILD_REF,
+                evidence, soak, python, go, VERSION, BUILD_REF,
             )
             self.assertEqual(report["result"], "AUTOMATED_EVIDENCE_PASS")
             self.assertEqual(report["inventory"]["agent_capable_hosts"], 3)
@@ -138,27 +184,28 @@ class V1EvidenceGateTests(unittest.TestCase):
                 report["inventory"]["architectures"],
                 ["amd64", "arm64"],
             )
+            self.assertEqual(report["stability"]["hosts"], 3)
             self.assertEqual(report["benchmark"]["python_runs"], 3)
             self.assertEqual(report["benchmark"]["go_runs"], 3)
-            self.assertIn(
+            self.assertNotIn(
                 "seven_day_stability",
                 report["remaining_manual_gates"],
             )
 
     def test_rejects_changed_report_and_duplicate_host(self):
         with tempfile.TemporaryDirectory() as temporary:
-            evidence, python, go = self.make_bundle(temporary)
+            evidence, soak, python, go = self.make_bundle(temporary)
             evidence[0].write_text("{}\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "checksum mismatch"):
-                gate.verify(evidence, python, go, VERSION, BUILD_REF)
+                gate.verify(evidence, soak, python, go, VERSION, BUILD_REF)
 
-            evidence, python, go = self.make_bundle(temporary)
+            evidence, soak, python, go = self.make_bundle(temporary)
             payload = json.loads(evidence[1].read_text(encoding="utf-8"))
             payload["host"]["fingerprint"] = "0000000000000001"
             evidence[1].write_text(json.dumps(payload), encoding="utf-8")
             self.write_checksum(evidence[1])
             with self.assertRaisesRegex(ValueError, "duplicate fingerprints"):
-                gate.verify(evidence, python, go, VERSION, BUILD_REF)
+                gate.verify(evidence, soak, python, go, VERSION, BUILD_REF)
 
     def test_rejects_source_architecture_and_build_mismatch(self):
         cases = (
@@ -168,7 +215,7 @@ class V1EvidenceGateTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temporary:
             for field, value, message in cases:
-                evidence, python, go = self.make_bundle(temporary)
+                evidence, soak, python, go = self.make_bundle(temporary)
                 payload = json.loads(evidence[1].read_text(encoding="utf-8"))
                 if field in {"provider", "architecture"}:
                     payload["host"][field] = value
@@ -177,7 +224,24 @@ class V1EvidenceGateTests(unittest.TestCase):
                 evidence[1].write_text(json.dumps(payload), encoding="utf-8")
                 self.write_checksum(evidence[1])
                 with self.assertRaisesRegex(ValueError, message):
-                    gate.verify(evidence, python, go, VERSION, BUILD_REF)
+                    gate.verify(evidence, soak, python, go, VERSION, BUILD_REF)
+
+    def test_rejects_missing_or_changed_soak_artifacts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence, soak, python, go = self.make_bundle(temporary)
+            with self.assertRaisesRegex(ValueError, "every agent evidence"):
+                gate.verify(
+                    evidence, soak[:2], python, go, VERSION, BUILD_REF,
+                )
+
+            evidence, soak, python, go = self.make_bundle(temporary)
+            payload = json.loads(soak[0].read_text(encoding="utf-8"))
+            csv_path = soak[0].parent / payload["raw_csv"]
+            csv_path.write_text("changed\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "missing or changed"):
+                gate.verify(
+                    evidence, soak, python, go, VERSION, BUILD_REF,
+                )
 
     def test_private_summary_has_matching_checksum(self):
         with tempfile.TemporaryDirectory() as temporary:
