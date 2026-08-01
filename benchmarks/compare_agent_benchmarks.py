@@ -3,6 +3,7 @@
 
 import argparse
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 import statistics
@@ -14,6 +15,24 @@ MINIMUM_DURATION = 86400
 
 def utc_timestamp():
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_artifact(payload, path_key, digest_key, source):
+    artifact = payload.get(path_key)
+    expected = payload.get(digest_key)
+    if not isinstance(artifact, str) or not isinstance(expected, str):
+        raise ValueError(f"{source} has no {path_key} integrity data")
+    target = Path(artifact)
+    if not target.is_file() or sha256(target) != expected:
+        raise ValueError(f"{source} has a missing or changed {path_key}")
 
 
 def load_summary(path, expected_name):
@@ -46,6 +65,8 @@ def load_summary(path, expected_name):
     fingerprint = payload.get("host", {}).get("fingerprint")
     if not isinstance(fingerprint, str) or len(fingerprint) != 16:
         raise ValueError(f"{source} has no host fingerprint")
+    verify_artifact(payload, "raw_csv", "raw_csv_sha256", source)
+    verify_artifact(payload, "raw_log", "raw_log_sha256", source)
     return payload
 
 
