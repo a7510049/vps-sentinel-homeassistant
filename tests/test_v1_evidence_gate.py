@@ -39,7 +39,7 @@ class V1EvidenceGateTests(unittest.TestCase):
     ):
         path = Path(root) / f"{name}.json"
         report = {
-            "schema_version": "1.0",
+            "schema_version": 1,
             "collector_version": "1.0.0-alpha.2",
             "build_ref": BUILD_REF,
             "collected_at": "2026-08-01T00:00:00Z",
