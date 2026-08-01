@@ -55,7 +55,15 @@ def client_for(port, client_id, username, password):
             connected.set()
 
     client.on_connect = on_connect
-    client.connect("127.0.0.1", port, 30)
+    deadline = time.monotonic() + 10
+    while True:
+        try:
+            client.connect("127.0.0.1", port, 30)
+            break
+        except OSError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
     client.loop_start()
     wait_until(connected.is_set)
     return client
