@@ -6,7 +6,7 @@
 
 - Python 與 Go 契約、單元測試、語法與靜態檢查。
 - Go Agent 原型 amd64／arm64 靜態建置與 checksum。
-- 真實 Mosquitto 上的三個 node credential、ACL 隔離、Controller fleet snapshot 與 Home Assistant Discovery。
+- 真實 Mosquitto 上的三個 node credential、ACL 隔離、Controller fleet snapshot、離線／恢復、密碼輪替後舊密碼失效、撤銷後拒絕連線，以及 Home Assistant Discovery。
 - combined 本機 credential 遷移、重跑及補償回復。
 - enrollment bundle 建立、輪替、撤銷、過期與失敗回復。
 - 前端卡片語法、鍵盤、深淺色資料模型與安裝註冊。
