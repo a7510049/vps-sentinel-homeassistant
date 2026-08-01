@@ -90,6 +90,7 @@ install -m 0644 "${SCRIPT_DIR}/enrollment_bundle.py" \
   "${INSTALL_DIR}/enrollment_bundle.py"
 install -m 0644 "${SCRIPT_DIR}/node_registry.py" "${INSTALL_DIR}/node_registry.py"
 install -m 0644 "${SHARED_DIR}/node_contract.py" "${INSTALL_DIR}/node_contract.py"
+install -m 0644 "${SCRIPT_DIR}/../VERSION" "${INSTALL_DIR}/.version"
 install -m 0755 "${SCRIPT_DIR}/vps-sentinel-enroll" \
   /usr/local/sbin/vps-sentinel-enroll
 install -m 0644 "${SCRIPT_DIR}/requirements.txt" \
