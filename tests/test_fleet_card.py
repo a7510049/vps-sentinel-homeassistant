@@ -16,8 +16,8 @@ class FleetCardContractTests(unittest.TestCase):
             SOURCE,
         )
         self.assertIn("state.attributes.nodes", SOURCE)
-        self.assertNotIn("sensor.vps_", SOURCE)
-        self.assertNotIn("binary_sensor.vps_", SOURCE)
+        self.assertNotIn("cpu_percent_entity", SOURCE)
+        self.assertNotIn("config.vps_id", SOURCE)
 
     def test_supports_all_registry_states_with_text_labels(self):
         for status, label in {
