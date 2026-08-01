@@ -57,7 +57,7 @@ class FleetCardContractTests(unittest.TestCase):
 
     def test_dynamic_values_are_escaped_before_html_rendering(self):
         self.assertIn("escape(value)", SOURCE)
-        self.assertIn("replaceAll("&", "&amp;")", SOURCE)
+        self.assertIn('replaceAll("&", "&amp;")', SOURCE)
         self.assertIn("this.escape(node.display_name", SOURCE)
         self.assertIn("this.escape(provider)", SOURCE)
 
