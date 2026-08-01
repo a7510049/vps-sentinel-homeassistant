@@ -91,7 +91,9 @@ jobs:
           vps-monitor/vps_monitor.py
           vps-monitor/node_contract.py
           vps-monitor/legacy_adapter.py
+          scripts/beta-evidence.py
           tests/test_apply_agent_config.py
+          tests/test_beta_evidence.py
           tests/test_broker_policy.py
           tests/test_controller.py
           tests/test_controller_install.py
