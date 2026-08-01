@@ -58,10 +58,37 @@ Controller 密碼只保存於 root-only 的環境檔，不顯示在完成摘要�
 - requirements hash 未變時不重建 venv。
 - Fleet Card 使用原子取代。
 
+## Agent enrollment bundle
+
+在 Controller 建立一次性 bundle：
+
+```bash
+sudo vps-sentinel-enroll create tokyo-web-01 \
+  --name "東京網站" \
+  --broker-host controller.example.ts.net
+```
+
+預設有效 15 分鐘，檔案權限固定為 `0600`。輸出只顯示 bundle 路徑與期限，不顯示 MQTT 密碼。透過安全通道將檔案傳到 Agent 後執行：
+
+```bash
+sudo bash install.sh --config /path/to/tokyo-web-01.json
+```
+
+`--config` 會自動使用 agent 角色、驗證欄位與期限、寫入 `0600` 環境檔、開啟 v1 contract publishing、執行既有服務驗證；成功後刪除一次性 bundle。安裝失敗則還原原本環境與 CA，保留 bundle 供期限內重試。
+
+輪替與撤銷：
+
+```bash
+sudo vps-sentinel-enroll rotate tokyo-web-01 \
+  --broker-host controller.example.ts.net
+sudo vps-sentinel-enroll revoke tokyo-web-01
+```
+
+Enrollment Store、password file 與 ACL 由同一流程更新。Broker 交易失敗時 Store 與 bundle 都會回復或移除，Controller 重新載入原本名冊。
+
 ## 尚待完成
 
-- `--config` 非互動 JSON 設定與完整 preflight report。
-- 一條 Agent enrollment 命令與短效憑證。
+- 非互動 combined／controller JSON 設定與完整 preflight report。
 - combined 本機 Agent 從 legacy 帳號自動遷移到專用 node credential。
 - Fleet Card Home Assistant resource 自動註冊。
 - Controller／Agent／combined 的升級、備份、復原與移除端到端測試。
