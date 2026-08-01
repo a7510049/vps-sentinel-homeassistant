@@ -23,3 +23,5 @@
 5. 提交 Pull Request。
 
 新功能應維持安全預設值，並避免增加低資源 VPS 的常駐負擔。
+
+準備版本說明時，請遵循 [GitHub Release 內容標準](docs/release-standard.md)。

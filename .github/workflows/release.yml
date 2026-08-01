@@ -98,9 +98,11 @@ jobs:
             exit 1
           fi
 
-          release_title="VPS Sentinel v${VERSION} — ${release_heading#* — }"
+          release_theme="${release_heading#* — }"
+          release_title="VPS Sentinel v${VERSION}"
           notes_file="$(mktemp)"
           trap 'rm -f -- "${notes_file}"' EXIT
+          printf '## %s\n\n' "${release_theme}" > "${notes_file}"
           awk -v version="${VERSION}" '
             index($0, "## " version " — ") == 1 {
               capture = 1
@@ -108,7 +110,7 @@ jobs:
             }
             capture && /^## / { exit }
             capture { print }
-          ' CHANGELOG.md > "${notes_file}"
+          ' CHANGELOG.md >> "${notes_file}"
 
           if ! grep -q '[^[:space:]]' "${notes_file}"; then
             echo "CHANGELOG.md 的 ${VERSION} 版本說明為空。" >&2
