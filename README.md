@@ -142,6 +142,14 @@ sudo bash install.sh
 bash install.sh --role combined --dry-run
 ```
 
+從 Controller 加入另一台 VPS 時，先執行 `sudo vps-sentinel-enroll create` 產生限時、權限 `0600` 的 bundle；在目標 VPS 使用：
+
+```bash
+sudo bash install.sh --config /path/to/enrollment.json
+```
+
+密碼不放在命令列，bundle 成功使用後會自動刪除。詳細流程請參考 [1.0 單一安裝入口](docs/v1-installation.md)。
+
 繁體中文安裝器會協助完成：
 
 1. Mosquitto MQTT Broker
