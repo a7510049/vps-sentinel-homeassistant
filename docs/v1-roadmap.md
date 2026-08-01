@@ -78,7 +78,8 @@
 
 目標：以相同資料契約比較 Go 原型與 Python Agent，不先承諾全面改寫。
 
-- Go 原型只實作資源收集、能力宣告、MQTT 發布與重連。
+- Go 原型只實作資源收集、能力宣告、MQTT TLS 發布、LWT、重連與優雅停止。
+- CI 交叉建置 Linux amd64／arm64，並以 Python 契約驗證 Go envelope。
 - 使用相同節點、頻率、Broker 與 24 小時負載。
 - 比較 RSS、CPU 平均／p95、啟動時間、發布延遲、重連可靠度與安裝大小。
 - 驗證 amd64／arm64、靜態產物、checksum、SBOM、升級及回復。
