@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
 import subprocess
 import sys
@@ -60,6 +61,15 @@ def _atomic_restore(path, snapshot):
     except Exception:
         temporary.unlink(missing_ok=True)
         raise
+
+
+def _secure_store_owner():
+    os.chmod(STORE_PATH, 0o600)
+    shutil.chown(
+        STORE_PATH,
+        user="vps-sentinel-controller",
+        group="vps-sentinel-controller",
+    )
 
 
 def _run(command):
@@ -191,6 +201,7 @@ def main():
                 )
             write_bundle(bundle_path, bundle)
 
+        _secure_store_owner()
         transaction = BrokerFilesTransaction(restarter=_restart)
         transaction.apply(
             credentials=(
