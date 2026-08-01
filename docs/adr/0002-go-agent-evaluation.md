@@ -105,7 +105,7 @@ sudo python3 benchmarks/compare_agent_benchmarks.py \
 
 比較器會拒絕少於三輪、未完成 24 小時、不同主機、不同架構、不同版本或不同 build ref 的資料。摘要內的 CSV／日誌路徑採相對路徑，整個證據目錄可以安全搬移後再驗證。它只能判斷 RSS 資源門檻，最終決策仍須通過本 ADR 的契約、雙架構、可靠性、升級回復、SBOM／漏洞掃描與維護性條件。完成後使用 `sudo systemctl start vps-monitor` 恢復正式 Agent。
 
-每個 Agent 分開執行、相同環境變數與 Broker，依本 ADR 重複三次。原始 CSV 不可只保留摘要；未完成 24 小時實機樣本與故障注入前，不得把 Go 設為預設。
+每個 Agent 分開執行、相同環境變數與 Broker，依本 ADR 重複三次。原始 CSV 不可只保留摘要；未完成 24 小時實機樣本與故障注入前，不得把 Go 設為預設。三台 Python Agent 的七天穩定性另由 `scripts/stability-soak.py` 監看 boot ID、MainPID 與 systemd `NRestarts`，不可用短時間程序測試代替。
 
 ## 決策結果
 
