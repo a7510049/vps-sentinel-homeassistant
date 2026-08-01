@@ -156,6 +156,88 @@ def verify_inventory(paths, expected_version, expected_ref):
     }
 
 
+def load_soak(path, expected_version, expected_ref):
+    source = Path(path)
+    verify_checksum(source)
+    try:
+        summary = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"{source}: invalid soak JSON") from error
+    if summary.get("name") != "python-agent-seven-day-soak":
+        raise ValueError(f"{source}: unsupported soak type")
+    if summary.get("version") != expected_version:
+        raise ValueError(f"{source}: soak version does not match")
+    if summary.get("build_ref") != expected_ref:
+        raise ValueError(f"{source}: soak build ref does not match")
+    if summary.get("status") != "completed":
+        raise ValueError(f"{source}: soak did not complete")
+    if not summary.get("qualifies_for_seven_day_gate"):
+        raise ValueError(f"{source}: soak does not qualify for seven-day gate")
+    requested = summary.get("requested_duration_seconds")
+    actual = summary.get("actual_measurement_seconds")
+    interval = summary.get("interval_seconds")
+    if (
+        not isinstance(requested, (int, float))
+        or requested < 604800
+        or not isinstance(actual, (int, float))
+        or actual < requested * 0.99
+        or not isinstance(interval, (int, float))
+        or interval > 300
+    ):
+        raise ValueError(f"{source}: invalid seven-day timing")
+
+    baseline = summary.get("baseline", {})
+    final = summary.get("final", {})
+    for key in ("boot_fingerprint", "main_pid", "n_restarts"):
+        if baseline.get(key) != final.get(key):
+            raise ValueError(f"{source}: unstable {key}")
+    if final.get("active_state") != "active" or final.get("sub_state") != "running":
+        raise ValueError(f"{source}: service was not running at completion")
+
+    fingerprint = summary.get("host", {}).get("fingerprint")
+    if not isinstance(fingerprint, str) or not FINGERPRINT.fullmatch(fingerprint):
+        raise ValueError(f"{source}: invalid soak host fingerprint")
+    artifact = summary.get("raw_csv")
+    digest = summary.get("raw_csv_sha256")
+    if not isinstance(artifact, str) or not isinstance(digest, str):
+        raise ValueError(f"{source}: soak CSV integrity data is missing")
+    target = Path(artifact)
+    if not target.is_absolute():
+        target = source.parent / target
+    if not target.is_file() or sha256(target) != digest:
+        raise ValueError(f"{source}: soak CSV is missing or changed")
+    return {
+        "source": str(source),
+        "fingerprint": fingerprint,
+        "samples": summary.get("samples"),
+        "actual_measurement_seconds": actual,
+    }
+
+
+def verify_soaks(paths, inventory, expected_version, expected_ref):
+    soaks = [
+        load_soak(path, expected_version, expected_ref)
+        for path in paths
+    ]
+    fingerprints = {item["fingerprint"] for item in soaks}
+    if len(fingerprints) != len(soaks):
+        raise ValueError("soak evidence contains duplicate hosts")
+    agent_fingerprints = {
+        item["fingerprint"]
+        for item in inventory["reports"]
+        if item["role"] in {"agent", "combined"}
+    }
+    if fingerprints != agent_fingerprints:
+        raise ValueError("every agent evidence host needs one seven-day soak")
+    return {
+        "hosts": len(soaks),
+        "minimum_duration_seconds": min(
+            item["actual_measurement_seconds"] for item in soaks
+        ),
+        "summaries": soaks,
+    }
+
+
 def verify_benchmarks(python_paths, go_paths, expected_version, expected_ref):
     report = comparison.compare(python_paths, go_paths)
     if report.get("version") != expected_version:
@@ -165,9 +247,18 @@ def verify_benchmarks(python_paths, go_paths, expected_version, expected_ref):
     return report
 
 
-def verify(evidence_paths, python_paths, go_paths, expected_version, expected_ref):
+def verify(
+    evidence_paths, soak_paths, python_paths, go_paths,
+    expected_version, expected_ref,
+):
     inventory = verify_inventory(
         evidence_paths,
+        expected_version,
+        expected_ref,
+    )
+    stability = verify_soaks(
+        soak_paths,
+        inventory,
         expected_version,
         expected_ref,
     )
@@ -184,6 +275,7 @@ def verify(evidence_paths, python_paths, go_paths, expected_version, expected_re
         "expected_build_ref": expected_ref,
         "result": "AUTOMATED_EVIDENCE_PASS",
         "inventory": inventory,
+        "stability": stability,
         "benchmark": {
             "host_fingerprint": benchmark["host_fingerprint"],
             "architecture": benchmark["architecture"],
@@ -198,7 +290,6 @@ def verify(evidence_paths, python_paths, go_paths, expected_version, expected_re
             "final_decision": benchmark["final_decision"],
         },
         "remaining_manual_gates": [
-            "seven_day_stability",
             "fleet_ui",
             "network_and_broker_recovery",
             "credential_rotation_and_revocation",
@@ -231,6 +322,7 @@ def parse_args(argv=None):
         description="驗證 VPS Sentinel 1.0 可機器判讀的實機證據套件"
     )
     parser.add_argument("--evidence", nargs="+", required=True)
+    parser.add_argument("--soak", nargs="+", required=True)
     parser.add_argument("--python", nargs="+", required=True)
     parser.add_argument("--go", nargs="+", required=True)
     parser.add_argument("--expected-version", required=True)
@@ -244,6 +336,7 @@ def main(argv=None):
     try:
         report = verify(
             args.evidence,
+            args.soak,
             args.python,
             args.go,
             args.expected_version,
