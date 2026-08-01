@@ -17,7 +17,7 @@ import time
 
 
 SCHEMA_VERSION = 1
-COLLECTOR_VERSION = "1.0.0-alpha.1"
+COLLECTOR_VERSION = "1.0.0-alpha.2"
 AGENT_ENV = "/etc/vps-monitor.env"
 CONTROLLER_ENV = "/etc/vps-sentinel-controller.env"
 COMPONENT_PATHS = {
@@ -294,7 +294,7 @@ def controller_probe(root):
     return mqtt_probe(environment, [topic], accept)
 
 
-def collect(root="/", expected_role="auto", live=True, provider="", region=""):
+def collect(\n    root="/", expected_role="auto", live=True, provider="", region="",\n    build_ref="",\n):
     components = detected_components(root)
     role = detected_role(components)
     checks = []
@@ -361,8 +361,7 @@ def collect(root="/", expected_role="auto", live=True, provider="", region=""):
     skipped = sum(item["status"] == "SKIP" for item in checks)
     return {
         "schema_version": SCHEMA_VERSION,
-        "collector_version": COLLECTOR_VERSION,
-        "collected_at": utc_timestamp(),
+        "collector_version": COLLECTOR_VERSION,\n        "build_ref": build_ref or None,\n        "collected_at": utc_timestamp(),
         "host": {
             "fingerprint": host_fingerprint(root),
             "provider": provider or None,
@@ -414,8 +413,7 @@ def main():
         default="auto",
     )
     parser.add_argument("--provider", default="")
-    parser.add_argument("--region", default="")
-    parser.add_argument("--root", default="/", help=argparse.SUPPRESS)
+    parser.add_argument("--region", default="")\n    parser.add_argument(\n        "--build-ref",\n        default="",\n        help="受測 commit SHA 或 Beta tag；建立正式驗收證據時必填",\n    )\n    parser.add_argument("--root", default="/", help=argparse.SUPPRESS)
     parser.add_argument("--no-live", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--output")
     args = parser.parse_args()
@@ -436,8 +434,7 @@ def main():
         expected_role=args.expect_role,
         live=live,
         provider=args.provider,
-        region=args.region,
-    )
+        region=args.region,\n        build_ref=args.build_ref,\n    )
     report_path, checksum_path = write_report(report, output)
     print(f"證據報告：{report_path}")
     print(f"SHA-256：{checksum_path}")
