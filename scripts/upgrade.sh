@@ -12,6 +12,7 @@ readonly UNINSTALL_COMMAND="/usr/local/sbin/vps-sentinel-uninstall"
 readonly UPGRADE_COMMAND="/usr/local/sbin/vps-sentinel-upgrade"
 readonly DOCTOR_COMMAND="/usr/local/sbin/vps-sentinel-doctor"
 readonly BACKUP_COMMAND="/usr/local/sbin/vps-sentinel-backup"
+readonly EVIDENCE_COMMAND="/usr/local/sbin/vps-sentinel-beta-evidence"
 readonly AUTOMATIONS_COMMAND="/usr/local/sbin/vps-sentinel-automations"
 readonly APPLE_COMMAND="/usr/local/sbin/vps-sentinel-apple"
 readonly CONTROLLER_DIR="/opt/vps-sentinel-controller"
@@ -146,7 +147,7 @@ if [[ -z "${source_dir}" ]]; then
 fi
 for file in VERSION scripts/manage.sh scripts/update.sh scripts/uninstall.sh \
   scripts/upgrade.sh scripts/doctor.sh scripts/backup.sh \
-  scripts/automations.sh scripts/apple-dashboard.sh \
+  scripts/beta-evidence.py scripts/automations.sh scripts/apple-dashboard.sh \
   vps-monitor/vps_monitor.py vps-monitor/node_contract.py \
   vps-monitor/legacy_adapter.py vps-monitor/requirements.txt \
   vps-monitor/vps-monitor.service \
@@ -220,8 +221,8 @@ fi
 cp -a "${SERVICE_FILE}" "${backup}/vps-monitor.service" 2>/dev/null || true
 for file in "${MANAGE_COMMAND}" "${UPDATE_COMMAND}" \
   "${UNINSTALL_COMMAND}" "${UPGRADE_COMMAND}" "${DOCTOR_COMMAND}" \
-  "${BACKUP_COMMAND}" "${AUTOMATIONS_COMMAND}" "${APPLE_COMMAND}" \
-  "${ENROLL_COMMAND}"; do
+  "${BACKUP_COMMAND}" "${EVIDENCE_COMMAND}" "${AUTOMATIONS_COMMAND}" \
+  "${APPLE_COMMAND}" "${ENROLL_COMMAND}"; do
   [[ -e "${file}" ]] && cp -a "${file}" "${backup}/$(basename "${file}")"
 done
 [[ ! -d "${INSTALL_DIR}/blueprints" ]] ||
@@ -272,7 +273,8 @@ rollback() {
     install -m 0644 "${backup}/vps-monitor.service" "${SERVICE_FILE}"
   for name in vps-sentinel vps-sentinel-update vps-sentinel-uninstall \
     vps-sentinel-upgrade vps-sentinel-doctor vps-sentinel-backup \
-    vps-sentinel-automations vps-sentinel-apple vps-sentinel-enroll; do
+    vps-sentinel-beta-evidence vps-sentinel-automations \
+    vps-sentinel-apple vps-sentinel-enroll; do
     if [[ -f "${backup}/${name}" ]]; then
       install -m 0755 "${backup}/${name}" "/usr/local/sbin/${name}"
     else
@@ -373,6 +375,8 @@ install -m 0755 "${source_dir}/scripts/uninstall.sh" "${UNINSTALL_COMMAND}"
 install -m 0755 "${source_dir}/scripts/upgrade.sh" "${UPGRADE_COMMAND}"
 install -m 0755 "${source_dir}/scripts/doctor.sh" "${DOCTOR_COMMAND}"
 install -m 0755 "${source_dir}/scripts/backup.sh" "${BACKUP_COMMAND}"
+install -m 0755 "${source_dir}/scripts/beta-evidence.py" \
+  "${EVIDENCE_COMMAND}"
 install -m 0755 "${source_dir}/scripts/automations.sh" \
   "${AUTOMATIONS_COMMAND}"
 install -m 0755 "${source_dir}/scripts/apple-dashboard.sh" "${APPLE_COMMAND}"
