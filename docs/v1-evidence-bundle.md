@@ -60,7 +60,25 @@ sudo python3 scripts/stability-soak.py \
 
 摘要使用相對 artifact 路徑，因此複製時要把 summary JSON、CSV 與 log 放在同一證據目錄。比較器會重新計算 CSV／log SHA-256，不接受只有摘要或被修改的原始檔。
 
-## 產生自動化 Gate 報告
+## 填寫人工實機驗收 manifest
+
+先依 [1.0 實機驗收 manifest 標準](v1-acceptance-manifest.md) 建立範本，完成 24 個固定 Gate 後重新 seal：
+
+```bash
+python3 scripts/v1-attestation.py init \
+  --version "${VERSION}" --build-ref "${BUILD_REF}" \
+  --operator "qa-operator" \
+  --output evidence/v1-attestation.json
+
+python3 scripts/v1-attestation.py seal evidence/v1-attestation.json
+python3 scripts/v1-attestation.py verify evidence/v1-attestation.json \
+  --expected-version "${VERSION}" --expected-ref "${BUILD_REF}" \
+  --output evidence/v1-manual-gate.json
+```
+
+每項必須為 PASS，包含起訖時間、實際指令、完整 coverage，以及至少一個可重新計算 SHA-256 的本機證據檔。PENDING、缺項、籠統 coverage、路徑逃逸或檔案遭修改都會失敗。
+
+## 產生最終 Gate 報告
 
 ```bash
 python3 scripts/verify-v1-evidence.py \
@@ -71,7 +89,8 @@ python3 scripts/verify-v1-evidence.py \
   --go benchmarks/go-run-{1,2,3}.csv.summary.json \
   --expected-version "${VERSION}" \
   --expected-ref "${BUILD_REF}" \
-  --output evidence/v1-automated-gate.json
+  --attestation evidence/v1-attestation.json \
+  --output evidence/v1-release-gate.json
 ```
 
-成功時會建立權限 `0600` 的 JSON 與 `.sha256`。結果 `AUTOMATED_EVIDENCE_PASS` 只表示三台七天 soak、主機清冊與 benchmark 自動化證據完整；報告仍會保留 `remaining_manual_gates`，在 #65 全部完成並關閉以前仍不得發布 1.0。
+成功時會建立權限 `0600` 的 JSON 與 `.sha256`。未提供 manifest 時結果仍是 `AUTOMATED_EVIDENCE_PASS` 且保留 `remaining_manual_gates`；只有自動化證據與 24 個人工 Gate 同時通過，才會得到 `RELEASE_EVIDENCE_PASS`。即使如此，#65 仍必須完成並關閉，發布 workflow 才會放行 1.0。

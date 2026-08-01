@@ -17,6 +17,12 @@ COMPARISON_SPEC = importlib.util.spec_from_file_location(
 )
 comparison = importlib.util.module_from_spec(COMPARISON_SPEC)
 COMPARISON_SPEC.loader.exec_module(comparison)
+ATTESTATION_SPEC = importlib.util.spec_from_file_location(
+    "v1_attestation",
+    ROOT / "scripts" / "v1-attestation.py",
+)
+attestation = importlib.util.module_from_spec(ATTESTATION_SPEC)
+ATTESTATION_SPEC.loader.exec_module(attestation)
 
 MINIMUM_AGENT_HOSTS = 3
 FINGERPRINT = re.compile(r"^[0-9a-f]{16}$")
@@ -249,7 +255,7 @@ def verify_benchmarks(python_paths, go_paths, expected_version, expected_ref):
 
 def verify(
     evidence_paths, soak_paths, python_paths, go_paths,
-    expected_version, expected_ref,
+    expected_version, expected_ref, attestation_path=None,
 ):
     inventory = verify_inventory(
         evidence_paths,
@@ -268,12 +274,23 @@ def verify(
         expected_version,
         expected_ref,
     )
+    manual = None
+    if attestation_path:
+        manual = attestation.verify_manifest(
+            attestation_path,
+            expected_version,
+            expected_ref,
+        )
     return {
         "schema_version": 1,
         "generated_at": utc_timestamp(),
         "expected_version": expected_version,
         "expected_build_ref": expected_ref,
-        "result": "AUTOMATED_EVIDENCE_PASS",
+        "result": (
+            "RELEASE_EVIDENCE_PASS"
+            if manual
+            else "AUTOMATED_EVIDENCE_PASS"
+        ),
         "inventory": inventory,
         "stability": stability,
         "benchmark": {
@@ -289,12 +306,27 @@ def verify(
             ],
             "final_decision": benchmark["final_decision"],
         },
-        "remaining_manual_gates": [
-            "fleet_ui",
-            "network_and_broker_recovery",
-            "credential_rotation_and_revocation",
-            "role_aware_upgrade_restore",
-        ],
+        "manual_acceptance": (
+            {
+                "result": manual["result"],
+                "operator": manual["operator"],
+                "gate_count": manual["gate_count"],
+                "artifact_count": manual["artifact_count"],
+            }
+            if manual
+            else None
+        ),
+        "remaining_manual_gates": (
+            []
+            if manual
+            else [
+                "fleet_ui",
+                "network_and_broker_recovery",
+                "credential_rotation_and_revocation",
+                "role_aware_upgrade_restore",
+                "go_functional_comparison_and_decision",
+            ]
+        ),
     }
 
 
@@ -327,6 +359,7 @@ def parse_args(argv=None):
     parser.add_argument("--go", nargs="+", required=True)
     parser.add_argument("--expected-version", required=True)
     parser.add_argument("--expected-ref", required=True)
+    parser.add_argument("--attestation")
     parser.add_argument("--output", required=True)
     return parser.parse_args(argv)
 
@@ -341,13 +374,17 @@ def main(argv=None):
             args.go,
             args.expected_version,
             args.expected_ref,
+            args.attestation,
         )
     except ValueError as error:
         raise SystemExit(f"FAIL: {error}") from error
     path, checksum = write_report(report, args.output)
     print(f"PASS: {path}")
     print(f"SHA-256: {checksum}")
-    print("仍需完成 #65 的人工實機 Gate，這份報告不代表可直接發布。")
+    if report["result"] == "RELEASE_EVIDENCE_PASS":
+        print("PASS: automated and manual release evidence")
+    else:
+        print("仍需完成 #65 的人工實機 Gate，這份報告不代表可直接發布。")
     return 0
 
 

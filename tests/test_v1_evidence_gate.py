@@ -135,6 +135,35 @@ class V1EvidenceGateTests(unittest.TestCase):
         self.write_checksum(path)
         return path
 
+    def make_attestation(self, root):
+        base = Path(root)
+        payload = gate.attestation.template(
+            VERSION,
+            BUILD_REF,
+            "qa-operator",
+        )
+        for item in payload["gates"]:
+            artifact = base / f"manual-{item['id']}.log"
+            artifact.write_text("sanitized PASS evidence\n", encoding="utf-8")
+            item.update({
+                "result": "PASS",
+                "started_at": "2026-08-01T00:00:00Z",
+                "ended_at": "2026-08-01T00:05:00Z",
+                "command": f"verify-{item['id']}",
+                "evidence": [{
+                    "label": "real acceptance evidence",
+                    "kind": "log",
+                    "path": artifact.name,
+                    "sha256": gate.sha256(artifact),
+                }],
+            })
+        path = gate.attestation.write_private(
+            payload,
+            base / "attestation.json",
+        )
+        gate.attestation.seal(path)
+        return path
+
     def make_bundle(self, root):
         evidence = [
             self.make_evidence(
@@ -190,6 +219,26 @@ class V1EvidenceGateTests(unittest.TestCase):
             self.assertNotIn(
                 "seven_day_stability",
                 report["remaining_manual_gates"],
+            )
+
+    def test_complete_attestation_upgrades_result_to_release_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence, soak, python, go = self.make_bundle(temporary)
+            attestation = self.make_attestation(temporary)
+            report = gate.verify(
+                evidence,
+                soak,
+                python,
+                go,
+                VERSION,
+                BUILD_REF,
+                attestation,
+            )
+            self.assertEqual(report["result"], "RELEASE_EVIDENCE_PASS")
+            self.assertEqual(report["remaining_manual_gates"], [])
+            self.assertEqual(
+                report["manual_acceptance"]["gate_count"],
+                len(gate.attestation.GATES),
             )
 
     def test_rejects_changed_report_and_duplicate_host(self):
