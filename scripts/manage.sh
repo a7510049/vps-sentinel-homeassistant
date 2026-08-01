@@ -10,6 +10,7 @@ readonly UNINSTALL_COMMAND="/usr/local/sbin/vps-sentinel-uninstall"
 readonly UPGRADE_COMMAND="/usr/local/sbin/vps-sentinel-upgrade"
 readonly DOCTOR_COMMAND="/usr/local/sbin/vps-sentinel-doctor"
 readonly BACKUP_COMMAND="/usr/local/sbin/vps-sentinel-backup"
+readonly EVIDENCE_COMMAND="/usr/local/sbin/vps-sentinel-beta-evidence"
 readonly AUTOMATIONS_COMMAND="/usr/local/sbin/vps-sentinel-automations"
 readonly APPLE_COMMAND="/usr/local/sbin/vps-sentinel-apple"
 readonly VERSION_FILE="/opt/vps-monitor/.version"
@@ -633,6 +634,7 @@ print_help() {
   dashboard    建立或更新 Home Assistant 監控面板
   apple        設定 Apple 風格面板；加上 --apply 套用面板
   doctor       執行健康檢查
+  evidence     建立 1.0 Beta 匿名驗收報告
   backup       開啟備份與還原工具
   upgrade      更新 VPS Sentinel
   ha-update    更新 Home Assistant
@@ -649,6 +651,7 @@ run_command() {
     dashboard) install_dashboard ;;
     apple) run_tool "Apple 風格面板" "${APPLE_COMMAND}" "$@" ;;
     doctor) run_tool "健康檢查" "${DOCTOR_COMMAND}" ;;
+    evidence) run_tool "Beta 驗收報告" "${EVIDENCE_COMMAND}" "$@" ;;
     backup) run_tool "備份管理" "${BACKUP_COMMAND}" ;;
     upgrade) run_tool "VPS Sentinel 更新" "${UPGRADE_COMMAND}" ;;
     ha-update) run_tool "Home Assistant 更新" "${UPDATE_COMMAND}" ;;
