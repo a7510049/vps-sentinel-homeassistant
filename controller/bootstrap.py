@@ -131,7 +131,9 @@ def _bindings(*pairs):
     result = {}
     for username, node_id in pairs:
         if username and node_id:
-            result.setdefault(username, []).append(node_id)
+            nodes = result.setdefault(username, [])
+            if node_id not in nodes:
+                nodes.append(node_id)
     return result
 
 
