@@ -42,6 +42,30 @@ jobs:
           dashboard = source.match(/cat > "\$\{DASHBOARD_FILE\}" <<YAML\n(.*?)\nYAML/m).captures.first;
           YAML.parse(dashboard.gsub("${vps_id}", "demo"))'
 
+      - uses: actions/setup-go@0778a10ce47b5d450cf60fb94fafad4330008a35 # v7.0.0
+        with:
+          go-version-file: go-agent/go.mod
+          cache: false
+
+      - name: Validate Go Agent prototype
+        run: |
+          cd go-agent
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          unformatted="$(gofmt -l .)"
+          if [[ -n "${unformatted}" ]]; then
+            echo "${unformatted}"
+            exit 1
+          fi
+          go test ./...
+          go vet ./...
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../go-agent-amd64 .
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../go-agent-arm64 .
+          cd ..
+          VPS_ID=go-contract-01 VPS_NAME="Go Contract" ./go-agent-amd64 --once |
+            python3 tests/validate_go_agent_output.py
+          sha256sum go-agent-amd64 go-agent-arm64
+
       - name: Install Python dependencies
         run: >-
           python3 -m pip install
@@ -86,6 +110,8 @@ jobs:
           tests/test_command_interface.py
           tests/test_combined_migration.py
           tests/test_release_integrity.py
+          tests/validate_go_agent_output.py
+          benchmarks/agent_benchmark.py
 
       - name: Check moved script references
         run: |

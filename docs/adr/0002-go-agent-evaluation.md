@@ -1,6 +1,6 @@
 # ADR 0002：以量測決定是否採用 Go Agent
 
-- 狀態：提議
+- 狀態：實驗中
 - 日期：2026-08-01
 - 決策範圍：VPS Sentinel 1.0 Agent
 
@@ -60,6 +60,26 @@
 8. 維護者確認 Go 工具鏈與測試成本可長期承擔。
 
 「更多功能」本身不是換語言的理由；功能必須透過穩定契約與清楚邊界實現。
+
+## 可重現實驗工具
+
+repository 內的 `go-agent/` 是受限原型，不是正式安裝預設。CI 會在 Linux amd64 執行 Go 測試、`go vet`、靜態建置 amd64／arm64，並把 `--once` 輸出交由現有 Python `validate_envelope` 驗證，避免兩套語言各自解釋契約。
+
+長時間比較使用：
+
+```bash
+python3 benchmarks/agent_benchmark.py \
+  --name python \
+  --command "/opt/vps-monitor/venv/bin/python /opt/vps-monitor/vps_monitor.py" \
+  --duration 86400 --output results/python-run-1.csv
+
+python3 benchmarks/agent_benchmark.py \
+  --name go \
+  --command "./go-agent" \
+  --duration 86400 --output results/go-run-1.csv
+```
+
+每個 Agent 分開執行、相同環境變數與 Broker，依本 ADR 重複三次。原始 CSV 不可只保留摘要；未完成 24 小時實機樣本與故障注入前，不得把 Go 設為預設。
 
 ## 決策結果
 
