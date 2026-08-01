@@ -24,7 +24,7 @@ import (
 const (
 	schemaVersion = "1.0"
 	topicRoot     = "vps-sentinel/v1/nodes"
-	agentVersion = "go-prototype"
+	agentVersion  = "go-prototype"
 )
 
 var nodeIDPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9_-]{0,62}[a-z0-9])?$`)
@@ -186,16 +186,16 @@ func collectResources(delay time.Duration) (map[string]any, error) {
 	diskFree := disk.Bavail * uint64(disk.Bsize)
 	diskUsed := diskTotal - diskFree
 	return map[string]any{
-		"cpu_percent":        round(cpu, 1),
-		"memory_percent":     round(memoryPercent, 1),
-		"memory_used_gb":     round(float64(usedBytes)/1e9, 2),
+		"cpu_percent":         round(cpu, 1),
+		"memory_percent":      round(memoryPercent, 1),
+		"memory_used_gb":      round(float64(usedBytes)/1e9, 2),
 		"memory_available_gb": round(float64(availableBytes)/1e9, 2),
-		"memory_total_gb":    round(float64(totalBytes)/1e9, 2),
-		"disk_percent":       round(100*float64(diskUsed)/float64(diskTotal), 1),
-		"disk_used_gb":       round(float64(diskUsed)/1e9, 2),
-		"disk_free_gb":       round(float64(diskFree)/1e9, 2),
-		"disk_total_gb":      round(float64(diskTotal)/1e9, 2),
-		"reporting":          true,
+		"memory_total_gb":     round(float64(totalBytes)/1e9, 2),
+		"disk_percent":        round(100*float64(diskUsed)/float64(diskTotal), 1),
+		"disk_used_gb":        round(float64(diskUsed)/1e9, 2),
+		"disk_free_gb":        round(float64(diskFree)/1e9, 2),
+		"disk_total_gb":       round(float64(diskTotal)/1e9, 2),
+		"reporting":           true,
 	}, nil
 }
 
