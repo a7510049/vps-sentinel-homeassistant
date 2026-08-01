@@ -46,6 +46,8 @@ jobs:
         run: >-
           python3 -m py_compile
           vps-monitor/vps_monitor.py
+          vps-monitor/node_contract.py
+          tests/test_node_contract.py
           tests/test_vps_monitor.py
           tests/test_command_interface.py
           tests/test_release_integrity.py
