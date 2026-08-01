@@ -63,7 +63,7 @@ def load_evidence(path, expected_version, expected_ref):
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError(f"{source}: invalid evidence JSON") from error
 
-    if report.get("schema_version") != "1.0":
+    if report.get("schema_version") != 1:
         raise ValueError(f"{source}: unsupported evidence schema")
     if report.get("summary", {}).get("result") != "PASS":
         raise ValueError(f"{source}: live evidence did not pass")
