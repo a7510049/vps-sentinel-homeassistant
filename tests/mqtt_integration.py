@@ -4,6 +4,7 @@
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import signal
 import socket
 import subprocess
 import sys
@@ -69,12 +70,45 @@ def client_for(port, client_id, username, password):
     return client
 
 
-def envelope(node_id, message_type, sequence):
-    data = {
+def rejected_by_broker(port, client_id, username, password):
+    """Return the non-zero CONNACK received for a rejected credential."""
+    client = mqtt.Client(
+        mqtt.CallbackAPIVersion.VERSION2,
+        client_id=client_id,
+        clean_session=True,
+    )
+    client.username_pw_set(username, password)
+    result = []
+    received = threading.Event()
+
+    def on_connect(_client, _userdata, _flags, reason_code, _properties):
+        result.append(reason_code.value)
+        received.set()
+
+    client.on_connect = on_connect
+    client.connect("127.0.0.1", port, 30)
+    client.loop_start()
+    try:
+        wait_until(received.is_set)
+        assert result[0] != 0
+        return result[0]
+    finally:
+        client.disconnect()
+        client.loop_stop()
+
+
+def reload_broker(broker):
+    broker.send_signal(signal.SIGHUP)
+    time.sleep(0.5)
+    assert broker.poll() is None
+
+
+def envelope(node_id, message_type, sequence, *, data=None):
+    default_data = {
         "resources": {"cpu_percent": sequence, "memory_percent": 20},
         "health": {"health_status": "normal"},
         "metadata": {"os_name": "Ubuntu 24.04 LTS"},
-        "availability": {"status": "offline"},
+        "availability": {"status": "online"},
     }[message_type]
     return build_envelope(
         node_id=node_id,
@@ -84,7 +118,7 @@ def envelope(node_id, message_type, sequence):
         observed_at=datetime.now(timezone.utc),
         sequence=sequence,
         capabilities=["health.basic", "resources.basic"],
-        data=data,
+        data=default_data if data is None else data,
         labels={"test": "mqtt-e2e"},
     )
 
@@ -129,6 +163,7 @@ def main():
             text=True,
         )
         clients = []
+        agent_by_node = {}
         try:
             wait_until(lambda: broker.poll() is None)
             observer = client_for(
@@ -180,6 +215,7 @@ def main():
                     enrollment.password,
                 )
                 clients.append(agent)
+                agent_by_node[enrollment.node_id] = agent
                 for sequence, message_type in enumerate(
                     ("resources", "health", "metadata"),
                     start=1,
@@ -215,12 +251,52 @@ def main():
                 "singapore-api-01",
             }
 
-            first = clients[2]
+            tokyo = agent_by_node["tokyo-web-01"]
+            offline = json.dumps(
+                envelope(
+                    "tokyo-web-01",
+                    "availability",
+                    4,
+                    data={"status": "offline"},
+                )
+            )
+            tokyo.publish(
+                topic_for("tokyo-web-01", "availability"),
+                offline,
+                qos=1,
+                retain=True,
+            ).wait_for_publish(5)
+            wait_until(
+                lambda: fleets
+                and fleets[-1].get("online_count") == 2
+                and fleets[-1].get("problem_count") == 1
+            )
+
+            online = json.dumps(
+                envelope(
+                    "tokyo-web-01",
+                    "availability",
+                    5,
+                    data={"status": "online"},
+                )
+            )
+            tokyo.publish(
+                topic_for("tokyo-web-01", "availability"),
+                online,
+                qos=1,
+                retain=True,
+            ).wait_for_publish(5)
+            wait_until(
+                lambda: fleets
+                and fleets[-1].get("online_count") == 3
+                and fleets[-1].get("problem_count") == 0
+            )
+
             accepted = runtime.accepted_messages
             forbidden = json.dumps(
                 envelope("frankfurt-db-01", "resources", 99)
             )
-            first.publish(
+            tokyo.publish(
                 topic_for("frankfurt-db-01", "resources"),
                 forbidden,
                 qos=1,
@@ -228,7 +304,58 @@ def main():
             time.sleep(1)
             assert runtime.accepted_messages == accepted
 
-            print("three-node MQTT isolation and fleet discovery passed")
+            tokyo.disconnect()
+            tokyo.loop_stop()
+            clients.remove(tokyo)
+            rotated = store.rotate("tokyo-web-01")
+            subprocess.run(
+                [
+                    "mosquitto_passwd",
+                    "-b",
+                    str(passwd),
+                    rotated.username,
+                    rotated.password,
+                ],
+                check=True,
+                capture_output=True,
+            )
+            reload_broker(broker)
+            rejected_by_broker(
+                port,
+                "e2e-old-rotated",
+                rotated.username,
+                enrollments[0].password,
+            )
+            rotated_client = client_for(
+                port,
+                "e2e-new-rotated",
+                rotated.username,
+                rotated.password,
+            )
+            clients.append(rotated_client)
+
+            revoked_username = store.revoke("tokyo-web-01")
+            subprocess.run(
+                ["mosquitto_passwd", "-D", str(passwd), revoked_username],
+                check=True,
+                capture_output=True,
+            )
+            acl.write_text(BrokerPolicy(store).render_acl(), encoding="utf-8")
+            rotated_client.disconnect()
+            rotated_client.loop_stop()
+            clients.remove(rotated_client)
+            reload_broker(broker)
+            rejected_by_broker(
+                port,
+                "e2e-revoked",
+                rotated.username,
+                rotated.password,
+            )
+
+            print(
+                "three-node discovery, isolation, recovery, rotation and "
+                "revocation passed"
+            )
         finally:
             for client in clients:
                 client.disconnect()
