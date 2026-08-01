@@ -189,6 +189,7 @@ sudo vps-sentinel apple --apply
 | 安裝 Apple 面板元件／查看設定步驟 | `sudo vps-sentinel apple` |
 | 套用 Apple 風格面板 | `sudo vps-sentinel apple --apply` |
 | 健康檢查與修復 | `sudo vps-sentinel doctor` |
+| 建立 1.0 Beta 匿名驗收報告 | `sudo vps-sentinel evidence --expect-role agent` |
 | 建立或還原備份 | `sudo vps-sentinel backup` |
 | 更新 VPS Sentinel | `sudo vps-sentinel upgrade` |
 | 更新 Home Assistant | `sudo vps-sentinel ha-update` |

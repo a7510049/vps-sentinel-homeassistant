@@ -55,6 +55,7 @@ if [[ ! -f "${REPO_DIR}/scripts/manage.sh" ]]; then
 fi
 if [[ ! -f "${REPO_DIR}/scripts/upgrade.sh" || ! -f "${REPO_DIR}/VERSION" ||
       ! -f "${REPO_DIR}/scripts/doctor.sh" || ! -f "${REPO_DIR}/scripts/backup.sh" ||
+      ! -f "${REPO_DIR}/scripts/beta-evidence.py" ||
       ! -f "${REPO_DIR}/scripts/automations.sh" ||
       ! -f "${REPO_DIR}/scripts/apple-dashboard.sh" ||
       ! -f "${REPO_DIR}/home-assistant/www/vps-sentinel-apple-card.js" ||
@@ -732,6 +733,8 @@ install -m 0755 "${REPO_DIR}/scripts/doctor.sh" \
   /usr/local/sbin/vps-sentinel-doctor
 install -m 0755 "${REPO_DIR}/scripts/backup.sh" \
   /usr/local/sbin/vps-sentinel-backup
+install -m 0755 "${REPO_DIR}/scripts/beta-evidence.py" \
+  /usr/local/sbin/vps-sentinel-beta-evidence
 install -m 0755 "${REPO_DIR}/scripts/automations.sh" \
   /usr/local/sbin/vps-sentinel-automations
 install -m 0755 "${REPO_DIR}/scripts/apple-dashboard.sh" \

@@ -25,4 +25,19 @@
 | UI | 手機／桌面、深色／淺色、鍵盤與 reduced motion |
 | Go 評估 | Python／Go 各三次 24 小時原始 CSV；未達 ADR 門檻仍用 Python |
 
+## 單一證據收集指令
+
+每台測試 VPS 安裝完成後執行：
+
+```bash
+sudo vps-sentinel evidence \
+  --expect-role agent \
+  --provider "供應商名稱" \
+  --region "區域代號"
+```
+
+`--expect-role` 可使用 `agent`、`controller` 或 `combined`。指令會依角色檢查服務、設定權限、MQTT 在線資料、Controller Fleet 與 Home Assistant 設定，並在 `/root/vps-sentinel-evidence/` 建立權限 `0600` 的 JSON 與 SHA-256。
+
+報告不包含 MQTT 密碼、Token、Broker 位址、IP 或原始 node_id；node 身分只留下不可逆的短雜湊，以便跨次驗證是否仍為同一批節點。報告為 `FAIL` 時不得勾選對應 Gate。
+
 結果需記錄主機規格、OS、架構、版本、開始／結束時間、原始日誌與任何偏差。任一資料串台、舊 credential 仍可用、回復失敗或 7 天內非預期停止都是 Beta 阻擋項目。
