@@ -273,6 +273,10 @@ install -m 0755 "${SCRIPT_DIR}/vps_monitor.py" "${INSTALL_DIR}/vps_monitor.py"
 install -m 0644 "${SCRIPT_DIR}/node_contract.py" "${INSTALL_DIR}/node_contract.py"
 install -m 0644 "${SCRIPT_DIR}/legacy_adapter.py" "${INSTALL_DIR}/legacy_adapter.py"
 install -m 0644 "${SCRIPT_DIR}/requirements.txt" "${INSTALL_DIR}/requirements.txt"
+if [[ -f "${SCRIPT_DIR}/../scripts/beta-evidence.py" ]]; then
+  install -m 0755 "${SCRIPT_DIR}/../scripts/beta-evidence.py" \
+    /usr/local/sbin/vps-sentinel-beta-evidence
+fi
 requirements_hash="$(sha256sum "${INSTALL_DIR}/requirements.txt" | awk '{print $1}')"
 installed_hash="$(cat "${INSTALL_DIR}/.requirements.sha256" 2>/dev/null || true)"
 if [[ ! -x "${INSTALL_DIR}/venv/bin/python" ||
