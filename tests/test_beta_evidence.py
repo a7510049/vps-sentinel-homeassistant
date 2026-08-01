@@ -18,6 +18,7 @@ SETUP = (ROOT / "setup.sh").read_text(encoding="utf-8")
 AGENT_INSTALL = (ROOT / "vps-monitor" / "install.sh").read_text(encoding="utf-8")
 UPGRADE = (ROOT / "scripts" / "upgrade.sh").read_text(encoding="utf-8")
 UNINSTALL = (ROOT / "scripts" / "uninstall.sh").read_text(encoding="utf-8")
+MANAGE = (ROOT / "scripts" / "manage.sh").read_text(encoding="utf-8")
 
 
 class BetaEvidenceTests(unittest.TestCase):
@@ -105,6 +106,23 @@ class BetaEvidenceTests(unittest.TestCase):
             self.assertNotIn(forbidden, serialized)
         self.assertRegex(report["host"]["fingerprint"], r"^[0-9a-f]{16}$")
 
+    def test_node_fingerprint_is_stable_but_keyed_to_the_host(self):
+        temporary, root = self.make_root("controller")
+        self.addCleanup(temporary.cleanup)
+        first = beta_evidence.identity_fingerprint(root, "tokyo-web-01")
+        self.assertEqual(
+            first,
+            beta_evidence.identity_fingerprint(root, "tokyo-web-01"),
+        )
+        (root / "etc" / "machine-id").write_text(
+            "different-machine-id\n",
+            encoding="utf-8",
+        )
+        self.assertNotEqual(
+            first,
+            beta_evidence.identity_fingerprint(root, "tokyo-web-01"),
+        )
+
     def test_role_mismatch_fails_even_without_live_checks(self):
         temporary, root = self.make_root("agent")
         self.addCleanup(temporary.cleanup)
@@ -125,6 +143,8 @@ class BetaEvidenceTests(unittest.TestCase):
         self.assertIn("scripts/beta-evidence.py", UPGRADE)
         self.assertIn(command, UPGRADE)
         self.assertIn(command, UNINSTALL)
+        self.assertIn("evidence)", MANAGE)
+        self.assertIn('"${EVIDENCE_COMMAND}" "$@"', MANAGE)
 
     def test_writes_atomic_private_report_and_matching_checksum(self):
         temporary, root = self.make_root("agent")
