@@ -222,13 +222,13 @@ class BrokerFilesTransaction:
 
         self.password_file.parent.mkdir(parents=True, exist_ok=True)
         lock_path = self.password_file.parent / ".vps-sentinel-broker.lock"
-        snapshots = {
-            self.password_file: self._snapshot(self.password_file),
-            self.acl_file: self._snapshot(self.acl_file),
-            self.config_file: self._snapshot(self.config_file),
-        }
         with lock_path.open("a+b") as lock:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            snapshots = {
+                self.password_file: self._snapshot(self.password_file),
+                self.acl_file: self._snapshot(self.acl_file),
+                self.config_file: self._snapshot(self.config_file),
+            }
             with tempfile.TemporaryDirectory(
                 dir=self.password_file.parent,
                 prefix=".vps-sentinel-broker.",
