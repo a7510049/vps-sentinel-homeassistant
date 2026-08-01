@@ -68,6 +68,10 @@ class StabilityPreparationTests(unittest.TestCase):
         self.assertIn("Apple 卡片版本", UPGRADE)
         self.assertIn("MQTT 認證與在線資料均已驗證", UPGRADE)
         self.assertIn("wait_for_monitor_mqtt", UPGRADE)
+        self.assertIn("has_controller", UPGRADE)
+        self.assertIn("CONTROLLER_SERVICE", UPGRADE)
+        self.assertIn("FLEET_CARD_TARGET", UPGRADE)
+        self.assertIn("vps-sentinel-enroll", UPGRADE)
         self.assertIn('rm -f -- "${CARD_TARGET}"', UPGRADE)
         self.assertIn("/local/vps-sentinel-apple-card.js?v=${latest_version}", UPGRADE)
 
