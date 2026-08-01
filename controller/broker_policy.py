@@ -186,7 +186,7 @@ class BrokerFilesTransaction:
             self._atomic_write(path, snapshot["content"], snapshot["mode"])
             os.chown(path, snapshot["uid"], snapshot["gid"])
 
-    def _prepare_password_file(self, target, credentials):
+    def _prepare_password_file(self, target, credentials, remove_usernames):
         if self.password_file.exists():
             shutil.copy2(self.password_file, target)
         for index, username in enumerate(sorted(credentials)):
@@ -213,10 +213,31 @@ class BrokerFilesTransaction:
             raise BrokerPolicyError(
                 "password file does not exist and no credentials were supplied"
             )
+        for username in sorted(remove_usernames):
+            _username(username, "removed username")
+            result = self.runner([
+                "mosquitto_passwd",
+                "-D",
+                str(target),
+                username,
+            ])
+            if getattr(result, "returncode", 1) != 0:
+                raise BrokerPolicyError(
+                    f"mosquitto_passwd could not remove username {username!r}"
+                )
 
-    def apply(self, *, credentials, acl_text):
+    def apply(self, *, credentials, acl_text, remove_usernames=()):
         if not isinstance(credentials, dict):
             raise BrokerPolicyError("credentials must be an object")
+        if (
+            isinstance(remove_usernames, (str, bytes))
+            or not isinstance(remove_usernames, (list, tuple, set))
+        ):
+            raise BrokerPolicyError("remove_usernames must be a list")
+        if set(credentials).intersection(remove_usernames):
+            raise BrokerPolicyError(
+                "one username cannot be updated and removed together"
+            )
         if not isinstance(acl_text, str) or not acl_text.strip():
             raise BrokerPolicyError("acl_text must not be empty")
 
@@ -235,7 +256,11 @@ class BrokerFilesTransaction:
             ) as staging_name:
                 staging = Path(staging_name)
                 staged_password = staging / "passwd"
-                self._prepare_password_file(staged_password, credentials)
+                self._prepare_password_file(
+                    staged_password,
+                    credentials,
+                    remove_usernames,
+                )
                 staged_acl = acl_text.encode("utf-8")
                 staged_config = self.config_text().encode("utf-8")
                 try:

@@ -43,8 +43,12 @@ class ControllerInstallTests(unittest.TestCase):
 
     def test_installer_deploys_every_runtime_module(self):
         for module in [
+            "bootstrap.py",
+            "broker_policy.py",
             "controller.py",
+            "enroll_cli.py",
             "enrollment.py",
+            "enrollment_bundle.py",
             "node_registry.py",
             "node_contract.py",
         ]:
@@ -66,6 +70,17 @@ class ControllerInstallTests(unittest.TestCase):
 
     def test_controller_dependency_is_pinned(self):
         self.assertEqual(REQUIREMENTS.strip(), "paho-mqtt==2.1.0")
+
+    def test_installer_exposes_one_enrollment_command(self):
+        self.assertIn("vps-sentinel-enroll", INSTALLER)
+        wrapper = (
+            ROOT / "controller" / "vps-sentinel-enroll"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "/opt/vps-sentinel-controller/enroll_cli.py",
+            wrapper,
+        )
+        self.assertIn('"$@"', wrapper)
 
 
 if __name__ == "__main__":

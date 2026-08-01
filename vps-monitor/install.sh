@@ -37,7 +37,8 @@ if [[ ${EUID} -ne 0 ]]; then
   exit 1
 fi
 
-if [[ ! -t 0 ]]; then
+if [[ ! -t 0 &&
+      "${VPS_SENTINEL_NONINTERACTIVE:-false}" != "true" ]]; then
   error "這是互動式安裝器，請直接在終端機執行，不要透過 pipe 傳入。"
   exit 1
 fi

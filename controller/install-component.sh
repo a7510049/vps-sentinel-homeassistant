@@ -19,8 +19,9 @@ if [[ ${EUID} -ne 0 ]]; then
   exit 1
 fi
 
-for required in controller.py enrollment.py node_registry.py requirements.txt \
-  vps-sentinel-controller.service; do
+for required in bootstrap.py broker_policy.py controller.py enroll_cli.py \
+  enrollment.py enrollment_bundle.py node_registry.py requirements.txt \
+  vps-sentinel-controller.service vps-sentinel-enroll; do
   [[ -f "${SCRIPT_DIR}/${required}" ]] || {
     red "Controller 來源缺少 ${required}。"
     exit 1
@@ -81,9 +82,16 @@ fi
 install -d -m 0755 -o root -g root "${INSTALL_DIR}"
 install -d -m 0700 -o "${SERVICE_USER}" -g "${SERVICE_USER}" "${DATA_DIR}"
 install -m 0755 "${SCRIPT_DIR}/controller.py" "${INSTALL_DIR}/controller.py"
+install -m 0644 "${SCRIPT_DIR}/bootstrap.py" "${INSTALL_DIR}/bootstrap.py"
+install -m 0644 "${SCRIPT_DIR}/broker_policy.py" "${INSTALL_DIR}/broker_policy.py"
+install -m 0755 "${SCRIPT_DIR}/enroll_cli.py" "${INSTALL_DIR}/enroll_cli.py"
 install -m 0644 "${SCRIPT_DIR}/enrollment.py" "${INSTALL_DIR}/enrollment.py"
+install -m 0644 "${SCRIPT_DIR}/enrollment_bundle.py" \
+  "${INSTALL_DIR}/enrollment_bundle.py"
 install -m 0644 "${SCRIPT_DIR}/node_registry.py" "${INSTALL_DIR}/node_registry.py"
 install -m 0644 "${SHARED_DIR}/node_contract.py" "${INSTALL_DIR}/node_contract.py"
+install -m 0755 "${SCRIPT_DIR}/vps-sentinel-enroll" \
+  /usr/local/sbin/vps-sentinel-enroll
 install -m 0644 "${SCRIPT_DIR}/requirements.txt" \
   "${INSTALL_DIR}/requirements.txt"
 
@@ -100,8 +108,12 @@ if [[ ! -x "${INSTALL_DIR}/venv/bin/python" ||
 fi
 
 "${INSTALL_DIR}/venv/bin/python" -m py_compile \
+  "${INSTALL_DIR}/bootstrap.py" \
+  "${INSTALL_DIR}/broker_policy.py" \
   "${INSTALL_DIR}/controller.py" \
+  "${INSTALL_DIR}/enroll_cli.py" \
   "${INSTALL_DIR}/enrollment.py" \
+  "${INSTALL_DIR}/enrollment_bundle.py" \
   "${INSTALL_DIR}/node_registry.py" \
   "${INSTALL_DIR}/node_contract.py"
 
