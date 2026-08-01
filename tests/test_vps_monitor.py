@@ -2,6 +2,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -9,6 +10,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("MQTT_HOST", "127.0.0.1")
 MODULE_PATH = Path(__file__).parents[1] / "vps-monitor" / "vps_monitor.py"
+sys.path.insert(0, str(MODULE_PATH.parent))
 SPEC = importlib.util.spec_from_file_location("vps_monitor", MODULE_PATH)
 vps_monitor = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(vps_monitor)
