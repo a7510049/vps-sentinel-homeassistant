@@ -139,6 +139,7 @@ jobs:
           tests/test_enrollment_bundle.py
           tests/test_fleet_card.py
           tests/test_frontend_registration.py
+          tests/test_go_supply_chain.py
           tests/test_install_config.py
           tests/test_legacy_adapter.py
           tests/test_node_contract.py
