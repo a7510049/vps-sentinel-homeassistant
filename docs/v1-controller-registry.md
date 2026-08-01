@@ -57,3 +57,17 @@ sequence 在同一 Agent 程序內單調增加。若 sequence 變小但 `observe
 - 持久化 registry、憑證輪替及節點移除。
 - Home Assistant Discovery 與 fleet API。
 - 故障注入、Controller 重啟與備份／復原測試。
+
+## MQTT Runtime
+
+Controller runtime 訂閱 `vps-sentinel/v1/nodes/+/+`。每則訊息會先由 topic 解析 `node_id`，再向 Enrollment Store 查詢既有 username binding；未註冊節點不會進入 Registry。
+
+通過驗證後，Controller 以 QoS 1 retained 發布：
+
+```text
+vps-sentinel/v1/controller/fleet
+```
+
+fleet snapshot 包含產生時間、節點數、在線數、問題數與排序後的公開節點狀態，不包含 username、credential ID、密碼或 Token。Runtime 會定期重新建立 snapshot；即使沒有新 MQTT 訊息，TTL 到期仍會把節點改為 stale 或 offline。若公開狀態沒有變更，則不重複發布。
+
+正式接入 systemd 前仍需完成 Controller availability、設定檔、Broker ACL 交易、日誌速率限制及安裝／回復測試。
