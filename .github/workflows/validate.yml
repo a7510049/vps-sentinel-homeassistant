@@ -97,10 +97,22 @@ jobs:
 
       - name: Validate Go SBOM documents
         run: |
-          python3 -m json.tool go-agent-amd64.spdx.json >/dev/null
-          python3 -m json.tool go-agent-arm64.spdx.json >/dev/null
-          grep -Fq '"spdxVersion": "SPDX-2.3"' go-agent-amd64.spdx.json
-          grep -Fq '"spdxVersion": "SPDX-2.3"' go-agent-arm64.spdx.json
+          python3 - <<'PY'
+          import json
+
+          documents = {
+              "go-agent-amd64.spdx.json": "SPDX-2.3",
+              "go-agent-arm64.spdx.json": "SPDX-2.3",
+          }
+          for path, expected_version in documents.items():
+              with open(path, encoding="utf-8") as handle:
+                  document = json.load(handle)
+              actual_version = document.get("spdxVersion")
+              if actual_version != expected_version:
+                  raise SystemExit(
+                      f"{path}: expected {expected_version}, got {actual_version!r}"
+                  )
+          PY
 
       - name: Install Python dependencies
         run: >-
