@@ -146,7 +146,7 @@ echo "========================================================"
 echo
 echo "已完成：Home Assistant、Mosquitto ACL、Controller 與 Fleet Card 部署。"
 if [[ "${role}" == "combined" ]]; then
-  echo "本機 Agent 已保留 0.9.x 相容監控；下一階段會自動遷移到 fleet。"
+  echo "本機 Agent 已切換為專用 node credential，並同時發布 0.9.x 相容與 v1 fleet 資料。"
 else
   echo "請從 Controller 產生 Agent 註冊資料後加入 VPS。"
 fi
