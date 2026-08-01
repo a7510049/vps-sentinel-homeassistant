@@ -39,16 +39,73 @@ class ControllerRuntime:
         enrollments,
         *,
         fleet_topic="vps-sentinel/v1/controller/fleet",
+        availability_topic="vps-sentinel/v1/controller/online",
+        discovery_prefix="homeassistant",
         clock=None,
     ):
         self.client = client
         self.registry = registry
         self.enrollments = enrollments
         self.fleet_topic = fleet_topic
+        self.availability_topic = availability_topic
+        self.discovery_prefix = discovery_prefix.strip("/")
         self.clock = clock or _utc_now
         self.accepted_messages = 0
         self.rejected_messages = 0
         self.last_snapshot_signature = None
+
+    def publish_discovery(self):
+        device = {
+            "identifiers": ["vps_sentinel_controller"],
+            "name": "VPS Sentinel Controller",
+            "manufacturer": "VPS Sentinel",
+            "model": "Multi-node Controller",
+        }
+        common = {
+            "state_topic": self.fleet_topic,
+            "availability_topic": self.availability_topic,
+            "payload_available": "ON",
+            "payload_not_available": "OFF",
+            "device": device,
+        }
+        sensor = {
+            **common,
+            "name": "受監控 VPS 數量",
+            "unique_id": "vps_sentinel_fleet_node_count",
+            "default_entity_id": "sensor.vps_sentinel_fleet_nodes",
+            "value_template": "{{ value_json.node_count }}",
+            "json_attributes_topic": self.fleet_topic,
+            "icon": "mdi:server-network",
+            "entity_category": "diagnostic",
+        }
+        problem = {
+            **common,
+            "name": "VPS Fleet 問題",
+            "unique_id": "vps_sentinel_fleet_problem",
+            "default_entity_id": "binary_sensor.vps_sentinel_fleet_problem",
+            "value_template": (
+                "{{ 'ON' if value_json.problem_count | int > 0 else 'OFF' }}"
+            ),
+            "device_class": "problem",
+        }
+        configs = {
+            (
+                f"{self.discovery_prefix}/sensor/"
+                "vps_sentinel_controller/fleet_nodes/config"
+            ): sensor,
+            (
+                f"{self.discovery_prefix}/binary_sensor/"
+                "vps_sentinel_controller/fleet_problem/config"
+            ): problem,
+        }
+        for topic, payload in configs.items():
+            self.client.publish(
+                topic,
+                json.dumps(payload, ensure_ascii=False),
+                qos=1,
+                retain=True,
+            )
+        return configs
 
     def handle_message(self, topic, raw_payload):
         try:
@@ -125,6 +182,7 @@ def main():
         "/var/lib/vps-sentinel-controller/enrollments.json",
     )
     refresh_interval = max(5, int(env("CONTROLLER_REFRESH_INTERVAL", "15")))
+    discovery_prefix = env("DISCOVERY_PREFIX", "homeassistant")
 
     client = mqtt.Client(
         mqtt.CallbackAPIVersion.VERSION2,
@@ -138,6 +196,8 @@ def main():
         registry,
         enrollments,
         fleet_topic=fleet_topic,
+        availability_topic=availability_topic,
+        discovery_prefix=discovery_prefix,
     )
 
     def on_connect(mqtt_client, _userdata, _flags, reason_code, _properties):
@@ -146,6 +206,7 @@ def main():
             return
         mqtt_client.subscribe(NODE_SUBSCRIPTION, qos=1)
         mqtt_client.publish(availability_topic, "ON", qos=1, retain=True)
+        runtime.publish_discovery()
         runtime.publish_snapshot(force=True)
         print(
             f"Controller 已連線並監聽 {NODE_SUBSCRIPTION}",

@@ -156,6 +156,59 @@ class ControllerRuntimeTests(unittest.TestCase):
         self.assertEqual(self.runtime.rejected_messages, 1)
         self.assertEqual(self.registry.snapshot(), [])
 
+    def test_discovery_uses_stable_fleet_entities_and_attributes(self):
+        configs = self.runtime.publish_discovery()
+        self.assertEqual(
+            set(configs),
+            {
+                "homeassistant/sensor/vps_sentinel_controller/"
+                "fleet_nodes/config",
+                "homeassistant/binary_sensor/vps_sentinel_controller/"
+                "fleet_problem/config",
+            },
+        )
+        sensor = configs[
+            "homeassistant/sensor/vps_sentinel_controller/fleet_nodes/config"
+        ]
+        self.assertEqual(
+            sensor["unique_id"],
+            "vps_sentinel_fleet_node_count",
+        )
+        self.assertEqual(
+            sensor["default_entity_id"],
+            "sensor.vps_sentinel_fleet_nodes",
+        )
+        self.assertEqual(
+            sensor["json_attributes_topic"],
+            "vps-sentinel/v1/controller/fleet",
+        )
+        problem = configs[
+            "homeassistant/binary_sensor/vps_sentinel_controller/"
+            "fleet_problem/config"
+        ]
+        self.assertEqual(problem["device_class"], "problem")
+        self.assertEqual(
+            problem["availability_topic"],
+            "vps-sentinel/v1/controller/online",
+        )
+        self.assertTrue(all(
+            message[2] == {"qos": 1, "retain": True}
+            for message in self.client.messages
+        ))
+
+    def test_discovery_prefix_is_normalized(self):
+        runtime = controller.ControllerRuntime(
+            self.client,
+            self.registry,
+            self.store,
+            discovery_prefix="/custom/",
+            clock=lambda: self.now,
+        )
+        configs = runtime.publish_discovery()
+        self.assertTrue(all(
+            topic.startswith("custom/") for topic in configs
+        ))
+
 
 if __name__ == "__main__":
     unittest.main()
