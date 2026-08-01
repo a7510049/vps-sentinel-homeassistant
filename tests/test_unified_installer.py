@@ -67,6 +67,36 @@ class UnifiedInstallerTests(unittest.TestCase):
         self.assertIn("os.replace(temporary, card_target)", BOOTSTRAP)
         self.assertIn("os.chmod(temporary, 0o644)", BOOTSTRAP)
 
+    def test_agent_config_infers_role_and_uses_secure_consumer(self):
+        self.assertIn('--config 缺少檔案', ENTRYPOINT)
+        self.assertIn(
+            'if [[ -n "${config_file}" && -z "${role}" ]]',
+            ENTRYPOINT,
+        )
+        self.assertIn(
+            'controller/apply_agent_config.py',
+            ENTRYPOINT,
+        )
+        self.assertIn(
+            '--config 目前只適用於 agent 角色',
+            ENTRYPOINT,
+        )
+
+    def test_noninteractive_agent_mode_is_only_an_internal_flag(self):
+        agent_installer = (
+            ROOT / "vps-monitor" / "install.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'VPS_SENTINEL_NONINTERACTIVE:-false',
+            agent_installer,
+        )
+        self.assertIn(
+            'environment["VPS_SENTINEL_NONINTERACTIVE"] = "true"',
+            (
+                ROOT / "controller" / "apply_agent_config.py"
+            ).read_text(encoding="utf-8"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
