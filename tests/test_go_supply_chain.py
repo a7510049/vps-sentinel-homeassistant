@@ -19,6 +19,10 @@ class GoSupplyChainTests(unittest.TestCase):
         self.assertIn("最低為 1.25.12", ADR)
         self.assertNotIn("go 1.24.0", GO_MOD)
 
+    def test_network_dependency_uses_the_scanned_security_floor(self):
+        self.assertIn("golang.org/x/net v0.55.0", GO_MOD)
+        self.assertNotIn("golang.org/x/net v0.44.0", GO_MOD)
+
     def test_vulnerability_scanner_is_version_pinned(self):
         self.assertIn(
             "golang.org/x/vuln/cmd/govulncheck@v1.6.0",
