@@ -1,11 +1,11 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - VERSION
+  workflow_run:
+    workflows:
+      - Validate
+    types:
+      - completed
 
 permissions:
   contents: write
@@ -16,26 +16,51 @@ concurrency:
 
 jobs:
   release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 2
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Detect VERSION change
+        id: version_change
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if git diff --quiet "${HEAD_SHA}^" "${HEAD_SHA}" -- VERSION; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: Read and validate version
+        if: steps.version_change.outputs.changed == 'true'
         id: version
         shell: bash
         run: |
           set -Eeuo pipefail
           version="$(tr -d '[:space:]' < VERSION)"
-          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[1-9][0-9]*)?$ ]]; then
             echo "VERSION 格式無效：${version}" >&2
             exit 1
           fi
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${version}" >> "${GITHUB_OUTPUT}"
+          if [[ "${version}" == *-rc.* ]]; then
+            echo "prerelease=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "prerelease=false" >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: Check release consistency
+        if: steps.version_change.outputs.changed == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -47,42 +72,14 @@ jobs:
           grep -q 'VERSION_FILE="/opt/vps-monitor/.version"' \
             scripts/apple-dashboard.sh
 
-      - name: Check shell syntax
-        run: bash -n setup.sh scripts/*.sh vps-monitor/install.sh
-
-      - name: Run ShellCheck
-        run: shellcheck setup.sh scripts/*.sh vps-monitor/install.sh
-
-      - name: Check Apple card syntax
-        run: node --check home-assistant/www/vps-sentinel-apple-card.js
-
-      - name: Check YAML syntax
-        run: |
-          ruby -e "require 'yaml'; YAML.parse_file('.github/workflows/validate.yml'); YAML.parse_file('.github/workflows/release.yml')"
-          ruby -e "require 'yaml'; Dir['home-assistant/blueprints/*.yaml'].each { |file| YAML.parse_file(file) }"
-
-      - name: Install Python dependencies
-        run: python3 -m pip install -r vps-monitor/requirements.txt
-
-      - name: Run Python tests
-        run: python3 -m unittest discover -s tests -v
-
-      - name: Check Python syntax
-        run: >-
-          python3 -m py_compile
-          vps-monitor/vps_monitor.py
-          tests/test_vps_monitor.py
-          tests/test_command_interface.py
-          tests/test_release_integrity.py
-
-      - name: Check whitespace errors
-        run: git diff --check HEAD^ HEAD
-
       - name: Publish GitHub Release
+        if: steps.version_change.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
           VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -90,6 +87,7 @@ jobs:
             echo "${TAG} 已存在，略過重複發布。"
             exit 0
           fi
+
           release_heading="$(awk -v version="${VERSION}" '
             index($0, "## " version " — ") == 1 { print; exit }
           ' CHANGELOG.md)"
@@ -117,7 +115,13 @@ jobs:
             exit 1
           fi
 
-          gh release create "${TAG}" \
-            --target "${GITHUB_SHA}" \
-            --title "${release_title}" \
+          release_args=(
+            release create "${TAG}"
+            --target "${TARGET_SHA}"
+            --title "${release_title}"
             --notes-file "${notes_file}"
+          )
+          if [[ "${PRERELEASE}" == "true" ]]; then
+            release_args+=(--prerelease)
+          fi
+          gh "${release_args[@]}"
