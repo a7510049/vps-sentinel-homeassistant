@@ -1,6 +1,6 @@
 # 1.0 單一安裝入口
 
-狀態：Preview；互動式角色流程已接線，非互動 JSON 設定與節點註冊命令仍在後續階段。
+狀態：Preview；互動式與非互動角色流程、節點註冊命令、preflight 與續跑狀態均已接線。
 
 所有使用者從 repository 根目錄執行：
 
@@ -25,6 +25,19 @@ sudo bash install.sh --role combined
 sudo bash install.sh --role controller
 sudo bash install.sh --role agent
 ```
+
+## 非互動 combined／controller
+
+先確認 Tailscale 已登入，再使用 repository 內的嚴格 JSON 範例：
+
+```bash
+sudo bash install.sh --config examples/controller-install.json
+sudo bash install.sh --config examples/combined-install.json
+```
+
+設定檔只接受 `install_version`、`role` 與 combined 的 `node` 欄位，未知欄位會拒絕，避免把密碼或拼錯的設定靜默帶入。combined 的 profile 固定為 `efficient`、`balanced` 或 `realtime`。
+
+安裝前會輸出 JSON preflight report，檢查正式支援的作業系統、記憶體、磁碟與既有 Tailscale session。安裝階段原子記錄在 `/var/lib/vps-sentinel-installer/state.json`；中斷後重跑會顯示上次 phase，並沿用各元件既有的冪等／交易式流程續跑。
 
 ## Dry-run
 
@@ -101,5 +114,4 @@ Enrollment Store、password file 與 ACL 由同一流程更新。Broker 交易�
 
 ## 尚待完成
 
-- 非互動 combined／controller JSON 設定與完整 preflight report。
 - Controller／Agent／combined 的實機復原與長時間穩定性驗證。
