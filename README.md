@@ -17,6 +17,7 @@ VPS 常常安靜地待在遙遠的機房裡，替我們執行網站、容器、�
 - [1.0 分階段路線圖](docs/v1-roadmap.md)
 - [Agent／Controller 架構 ADR](docs/adr/0001-agent-controller-architecture.md)
 - [Go Agent 評估 ADR](docs/adr/0002-go-agent-evaluation.md)
+- [1.0 實機證據套件](docs/v1-evidence-bundle.md)
 
 目前穩定版本仍為 0.9.x；1.0 功能在通過各階段驗收前不會併入穩定版。
 
