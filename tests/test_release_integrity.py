@@ -18,7 +18,7 @@ class StabilityPreparationTests(unittest.TestCase):
     def test_release_version_surfaces_are_consistent(self):
         self.assertRegex(
             VERSION,
-            re.compile(r"^[0-9]+\\.[0-9]+\\.[0-9]+(?:-rc\\.[1-9][0-9]*)?$"),
+            re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:-rc\.[1-9][0-9]*)?$"),
         )
         self.assertIn(f'const CARD_VERSION = "{VERSION}";', CARD)
         self.assertIn(f"## {VERSION}", CHANGELOG)
@@ -110,7 +110,7 @@ class StabilityPreparationTests(unittest.TestCase):
         self.assertIn('release_title="VPS Sentinel v${VERSION}"', RELEASE)
         self.assertIn("printf '## %s\\n\\n'", RELEASE)
         self.assertIn("release_args+=(--prerelease)", RELEASE)
-        self.assertIn("-rc\\\\.[1-9][0-9]*", RELEASE)
+        self.assertIn("-rc\\\.[1-9][0-9]*", RELEASE)
         self.assertNotIn("--generate-notes", RELEASE)
 
     def test_changelog_version_headings_share_one_format(self):
