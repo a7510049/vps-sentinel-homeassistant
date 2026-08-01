@@ -266,6 +266,8 @@ def run_benchmark(args):
     summary = {
         "schema_version": 1,
         "name": args.name,
+        "version": args.version,
+        "build_ref": args.build_ref,
         "status": status,
         "measurement_complete": status == "completed",
         "started_at": started_at,
@@ -280,9 +282,9 @@ def run_benchmark(args):
         "cpu_percent": metric_summary(cpu_values),
         "process_exit_code": process.returncode,
         "terminated_by_harness": terminated_by_harness,
-        "raw_csv": str(output),
+        "raw_csv": str(Path(output).relative_to(summary_path.parent)),
         "raw_csv_sha256": sha256(output),
-        "raw_log": str(log_path),
+        "raw_log": str(Path(log_path).relative_to(summary_path.parent)),
         "raw_log_sha256": sha256(log_path),
         "environment_file_used": bool(args.env_file),
         "host": {
@@ -310,6 +312,8 @@ def run_benchmark(args):
 def parse_args(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", required=True)
+    parser.add_argument("--version", required=True)
+    parser.add_argument("--build-ref", required=True)
     parser.add_argument("--command", required=True)
     parser.add_argument("--duration", type=int, default=86400)
     parser.add_argument("--warmup", type=int, default=1800)
