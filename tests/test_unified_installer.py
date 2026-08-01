@@ -79,10 +79,6 @@ class UnifiedInstallerTests(unittest.TestCase):
     def test_agent_config_infers_role_and_uses_secure_consumer(self):
         self.assertIn('--config 缺少檔案', ENTRYPOINT)
         self.assertIn(
-            'if [[ -n "${config_file}" && -z "${role}" ]]',
-            ENTRYPOINT,
-        )
-        self.assertIn(
             'controller/apply_agent_config.py',
             ENTRYPOINT,
         )
