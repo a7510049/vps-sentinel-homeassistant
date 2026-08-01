@@ -19,11 +19,13 @@ sys.path.insert(0, str(REPO_ROOT / "vps-monitor"))
 
 from broker_policy import BrokerFilesTransaction, BrokerPolicy, BrokerPolicyError
 from enrollment import EnrollmentError, EnrollmentStore
+from register_frontend import FrontendConfigError, ensure_module_file
 
 
 CONTROLLER_ENV = Path("/etc/vps-sentinel-controller.env")
 MONITOR_ENV = Path("/etc/vps-monitor.env")
 STORE_PATH = Path("/var/lib/vps-sentinel-controller/enrollments.json")
+HA_CONFIGURATION = Path("/opt/homeassistant/config/configuration.yaml")
 
 
 def read_environment(path):
@@ -335,10 +337,53 @@ def main():
         os.chmod(temporary, 0o644)
         os.replace(temporary, card_target)
 
+    frontend_registered = False
+    if HA_CONFIGURATION.is_file() and card_target.is_file():
+        configuration_snapshot = _snapshot(HA_CONFIGURATION)
+        try:
+            frontend_changed = ensure_module_file(HA_CONFIGURATION)
+            if frontend_changed:
+                checked = run([
+                    "docker",
+                    "exec",
+                    "homeassistant",
+                    "python",
+                    "-m",
+                    "homeassistant",
+                    "--script",
+                    "check_config",
+                    "--config",
+                    "/config",
+                ], timeout=180)
+                if checked.returncode != 0:
+                    raise RuntimeError("Home Assistant 設定驗證失敗")
+                restarted = run(
+                    ["docker", "restart", "homeassistant"],
+                    timeout=180,
+                )
+                if restarted.returncode != 0:
+                    raise RuntimeError("Home Assistant 無法重新載入 Fleet Card")
+            frontend_registered = True
+        except FrontendConfigError as error:
+            print(f"保留既有 frontend 客製設定：{error}")
+        except Exception as error:
+            _restore(HA_CONFIGURATION, configuration_snapshot)
+            run(["docker", "restart", "homeassistant"], timeout=180)
+            raise SystemExit(
+                f"Fleet Card 自動註冊失敗，已回復 Home Assistant 設定：{error}"
+            ) from error
+
     print("Controller、Mosquitto ACL 與 Fleet Card 已完成部署。")
+    if frontend_registered:
+        print("Fleet Card 已自動註冊至 Home Assistant frontend。")
+    else:
+        print(
+            "自訂 frontend 結構無法安全改寫；請手動加入 "
+            "/local/vps-sentinel-fleet-card.js。"
+        )
     if node_id:
         print(f"本機 Agent {node_id} 已使用專用 credential 發布 v1 fleet 資料。")
-    print("下一步只需在 Home Assistant 註冊 Fleet Card 資源並加入其他 Agent。")
+    print("下一步可從 Controller 產生 bundle 並加入其他 Agent。")
 
 
 if __name__ == "__main__":

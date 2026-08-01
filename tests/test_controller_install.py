@@ -50,6 +50,7 @@ class ControllerInstallTests(unittest.TestCase):
             "enrollment.py",
             "enrollment_bundle.py",
             "node_registry.py",
+            "register_frontend.py",
             "node_contract.py",
         ]:
             with self.subTest(module=module):

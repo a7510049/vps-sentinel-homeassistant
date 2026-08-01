@@ -47,9 +47,12 @@ bash install.sh --role controller --dry-run
 7. 驗證 Mosquitto、Controller 與本機 Agent 後，以第二次 Broker transaction 撤銷共用 `vps-monitor` credential。
 8. 任一切換步驟失敗時，Enrollment Store、Agent 環境檔及 Broker policy 一起補償回復。
 9. Fleet Card 以暫存檔與 `os.replace` 部署。
-10. 單一入口輸出唯一完成摘要與仍需人工處理的 Home Assistant 步驟。
+10. 安全更新 Home Assistant `frontend.extra_module_url` 並自動載入 Fleet Card；設定驗證失敗則回復。
+11. 單一入口輸出唯一完成摘要與仍需人工處理的 Home Assistant 步驟。
 
 Controller 密碼只保存於 root-only 的環境檔，不顯示在完成摘要或日誌。
+
+標準 `frontend:` 設定會自動加入 `/local/vps-sentinel-fleet-card.js`，不需要再到 Lovelace 資源頁手動註冊。若既有設定使用 `frontend: !include ...` 或 inline mapping，安裝器不會猜測外部檔案結構，會保留原檔並顯示唯一的手動加入提示。
 
 ## 重跑
 
@@ -99,5 +102,4 @@ Enrollment Store、password file 與 ACL 由同一流程更新。Broker 交易�
 ## 尚待完成
 
 - 非互動 combined／controller JSON 設定與完整 preflight report。
-- Fleet Card Home Assistant resource 自動註冊。
 - Controller／Agent／combined 的實機復原與長時間穩定性驗證。

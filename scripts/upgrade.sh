@@ -158,7 +158,8 @@ for file in VERSION scripts/manage.sh scripts/update.sh scripts/uninstall.sh \
   controller/bootstrap.py controller/broker_policy.py \
   controller/controller.py controller/enroll_cli.py \
   controller/enrollment.py controller/enrollment_bundle.py \
-  controller/node_registry.py controller/requirements.txt \
+  controller/node_registry.py controller/register_frontend.py \
+  controller/requirements.txt \
   controller/vps-sentinel-controller.service \
   controller/vps-sentinel-enroll; do
   [[ -f "${source_dir}/${file}" ]] || {
@@ -188,7 +189,8 @@ python3 -m py_compile \
   "${source_dir}/controller/enroll_cli.py" \
   "${source_dir}/controller/enrollment.py" \
   "${source_dir}/controller/enrollment_bundle.py" \
-  "${source_dir}/controller/node_registry.py"
+  "${source_dir}/controller/node_registry.py" \
+  "${source_dir}/controller/register_frontend.py"
 green "下載內容、版本與基本語法檢查完成"
 
 timestamp="$(date +%Y%m%d-%H%M%S)"
@@ -335,7 +337,8 @@ install -m 0644 "${source_dir}/vps-monitor/vps-monitor.service" \
 fi
 if [[ "${has_controller}" == "true" ]]; then
   for file in bootstrap.py broker_policy.py controller.py enroll_cli.py \
-    enrollment.py enrollment_bundle.py node_registry.py; do
+    enrollment.py enrollment_bundle.py node_registry.py \
+    register_frontend.py; do
     install -m 0644 "${source_dir}/controller/${file}" \
       "${CONTROLLER_DIR}/${file}"
   done
