@@ -71,6 +71,7 @@ class EnrollCliTests(unittest.TestCase):
                 FakeTransaction,
             ),
             patch.object(enroll_cli, "_run", return_value=True),
+            patch.object(enroll_cli, "_secure_store_owner"),
             patch.object(sys, "argv", ["vps-sentinel-enroll", *arguments]),
             patch("sys.stdout", output),
         ):
@@ -137,6 +138,14 @@ class EnrollCliTests(unittest.TestCase):
         self.assertFalse(
             (self.bundle_dir / "tokyo-web-01.json").exists()
         )
+
+    def test_store_owner_is_set_for_controller_service(self):
+        source = (
+            CONTROLLER_DIR / "enroll_cli.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('os.chmod(STORE_PATH, 0o600)', source)
+        self.assertIn('user="vps-sentinel-controller"', source)
+        self.assertIn('group="vps-sentinel-controller"', source)
 
 
 if __name__ == "__main__":
