@@ -140,6 +140,7 @@ jobs:
           vps-monitor/node_contract.py
           vps-monitor/legacy_adapter.py
           scripts/beta-evidence.py
+          scripts/verify-v1-evidence.py
           tests/test_agent_benchmark.py
           tests/test_apply_agent_config.py
           tests/test_beta_evidence.py
@@ -160,6 +161,7 @@ jobs:
           tests/test_unified_installer.py
           tests/test_upgrade_roles.py
           tests/test_vps_monitor.py
+          tests/test_v1_evidence_gate.py
           tests/test_command_interface.py
           tests/test_combined_migration.py
           tests/mqtt_integration.py
