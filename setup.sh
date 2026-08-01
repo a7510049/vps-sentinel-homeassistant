@@ -641,6 +641,7 @@ else
     printf 'WATCH_SERVICES=%s\n' "$(env_quote "${services}")"
     printf 'ALLOW_REMOTE_ACTIONS="false"\n'
     printf 'COMMAND_COOLDOWN="300"\n'
+    printf 'PUBLISH_V1_CONTRACT="false"\n'
   } > "${MONITOR_ENV}"
   chmod 0600 "${MONITOR_ENV}"
 fi
@@ -648,6 +649,10 @@ fi
 install -d -m 0755 "${MONITOR_DIR}"
 install -m 0755 "${REPO_DIR}/vps-monitor/vps_monitor.py" \
   "${MONITOR_DIR}/vps_monitor.py"
+install -m 0644 "${REPO_DIR}/vps-monitor/node_contract.py" \
+  "${MONITOR_DIR}/node_contract.py"
+install -m 0644 "${REPO_DIR}/vps-monitor/legacy_adapter.py" \
+  "${MONITOR_DIR}/legacy_adapter.py"
 install -m 0644 "${REPO_DIR}/vps-monitor/requirements.txt" \
   "${MONITOR_DIR}/requirements.txt"
 requirements_hash="$(sha256sum "${MONITOR_DIR}/requirements.txt" | awk '{print $1}')"
