@@ -17,6 +17,16 @@ from urllib.request import Request, urlopen
 import psutil
 import paho.mqtt.client as mqtt
 
+from legacy_adapter import (
+    LegacyCompatibilityError,
+    health_envelope,
+    legacy_capabilities,
+    metadata_envelope,
+    migration_node_id,
+    resource_envelope,
+)
+from node_contract import topic_for
+
 
 def env(name, default=""):
     return os.getenv(name, default)
@@ -54,6 +64,9 @@ REMOTE_ACTIONS = env("ALLOW_REMOTE_ACTIONS", "false").lower() in (
     "1", "true", "yes"
 )
 COMMAND_COOLDOWN = max(60, int(env("COMMAND_COOLDOWN", "300")))
+PUBLISH_V1_CONTRACT = env("PUBLISH_V1_CONTRACT", "false").lower() in (
+    "1", "true", "yes"
+)
 
 if not HOST:
     raise SystemExit("MQTT_HOST is required")
@@ -81,6 +94,91 @@ def installed_version():
             return version_file.read().strip() or "unknown"
     except OSError:
         return "development"
+
+
+class V1Publisher:
+    """Opt-in dual publisher used while the Controller is under development."""
+
+    def __init__(
+        self,
+        client,
+        *,
+        enabled,
+        node_id,
+        display_name,
+        agent_version,
+        capabilities,
+    ):
+        self.client = client
+        self.enabled = enabled
+        self.node_id = node_id
+        self.display_name = display_name
+        self.agent_version = agent_version
+        self.capabilities = capabilities
+        self.sequence = 0
+        self.lock = threading.Lock()
+        if enabled:
+            migration_node_id(node_id)
+
+    def _next_sequence(self):
+        with self.lock:
+            self.sequence += 1
+            return self.sequence
+
+    def _publish(self, message_type, builder, qos):
+        if not self.enabled:
+            return None
+        envelope = builder(self._next_sequence())
+        self.client.publish(
+            topic_for(self.node_id, message_type),
+            json.dumps(envelope, ensure_ascii=False),
+            qos=qos,
+            retain=True,
+        )
+        return envelope
+
+    def publish_resources(self, payload):
+        return self._publish(
+            "resources",
+            lambda sequence: resource_envelope(
+                vps_id=self.node_id,
+                display_name=self.display_name,
+                agent_version=self.agent_version,
+                payload=payload,
+                sequence=sequence,
+                capabilities=self.capabilities,
+            ),
+            qos=0,
+        )
+
+    def publish_health(self, payload):
+        return self._publish(
+            "health",
+            lambda sequence: health_envelope(
+                vps_id=self.node_id,
+                display_name=self.display_name,
+                agent_version=self.agent_version,
+                payload=payload,
+                sequence=sequence,
+                capabilities=self.capabilities,
+            ),
+            qos=1,
+        )
+
+    def publish_metadata(self, status_payload):
+        return self._publish(
+            "metadata",
+            lambda sequence: metadata_envelope(
+                vps_id=self.node_id,
+                display_name=self.display_name,
+                agent_version=self.agent_version,
+                status_payload=status_payload,
+                sequence=sequence,
+                capabilities=self.capabilities,
+                architecture=platform.machine(),
+            ),
+            qos=1,
+        )
 
 
 DEVICE = {
@@ -701,6 +799,18 @@ def main():
         clean_session=True,
     )
     maintenance = MaintenanceController(client)
+    v1_publisher = V1Publisher(
+        client,
+        enabled=PUBLISH_V1_CONTRACT,
+        node_id=VPS_ID,
+        display_name=NAME,
+        agent_version=installed_version(),
+        capabilities=legacy_capabilities(
+            monitor_network=MONITOR_NETWORK,
+            docker_present=DOCKER_PRESENT,
+            remote_actions=REMOTE_ACTIONS,
+        ),
+    )
 
     def on_command(_client, _userdata, message):
         # Empty retained cleanup messages are housekeeping.
@@ -811,6 +921,7 @@ def main():
                 qos=0,
                 retain=True,
             )
+            v1_publisher.publish_resources(resource_payload)
 
             if now >= next_update_check:
                 updates = security_updates()
@@ -891,6 +1002,8 @@ def main():
                     qos=1,
                     retain=True,
                 )
+                v1_publisher.publish_health(status_payload)
+                v1_publisher.publish_metadata(status_payload)
                 last_status_payload = comparable_status
             wake_on_connect.wait(
                 timeout=max(1, INTERVAL - (time.monotonic() - loop_started))

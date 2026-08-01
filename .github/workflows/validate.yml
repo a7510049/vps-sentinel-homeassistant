@@ -50,6 +50,7 @@ jobs:
           vps-monitor/legacy_adapter.py
           tests/test_legacy_adapter.py
           tests/test_node_contract.py
+          tests/test_v1_publisher.py
           tests/test_vps_monitor.py
           tests/test_command_interface.py
           tests/test_release_integrity.py

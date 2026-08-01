@@ -132,7 +132,8 @@ fi
 for file in VERSION scripts/manage.sh scripts/update.sh scripts/uninstall.sh \
   scripts/upgrade.sh scripts/doctor.sh scripts/backup.sh \
   scripts/automations.sh scripts/apple-dashboard.sh \
-  vps-monitor/vps_monitor.py vps-monitor/requirements.txt \
+  vps-monitor/vps_monitor.py vps-monitor/node_contract.py \
+  vps-monitor/legacy_adapter.py vps-monitor/requirements.txt \
   vps-monitor/vps-monitor.service \
   home-assistant/blueprints/problem-notification.yaml \
   home-assistant/blueprints/offline-notification.yaml \
@@ -155,13 +156,18 @@ if [[ "${card_version}" != "${latest_version}" ]]; then
   exit 1
 fi
 bash -n "${source_dir}/scripts/"*.sh
-python3 -m py_compile "${source_dir}/vps-monitor/vps_monitor.py"
+python3 -m py_compile \
+  "${source_dir}/vps-monitor/vps_monitor.py" \
+  "${source_dir}/vps-monitor/node_contract.py" \
+  "${source_dir}/vps-monitor/legacy_adapter.py"
 green "下載內容、版本與基本語法檢查完成"
 
 timestamp="$(date +%Y%m%d-%H%M%S)"
 backup="${BACKUP_ROOT}/${timestamp}"
 install -d -m 0700 "${backup}"
 cp -a "${INSTALL_DIR}/vps_monitor.py" "${backup}/" 2>/dev/null || true
+cp -a "${INSTALL_DIR}/node_contract.py" "${backup}/" 2>/dev/null || true
+cp -a "${INSTALL_DIR}/legacy_adapter.py" "${backup}/" 2>/dev/null || true
 cp -a "${INSTALL_DIR}/requirements.txt" "${backup}/" 2>/dev/null || true
 cp -a "${INSTALL_DIR}/.requirements.sha256" "${backup}/" 2>/dev/null || true
 cp -a "${INSTALL_DIR}/.version" "${backup}/" 2>/dev/null || true
@@ -185,6 +191,13 @@ rollback() {
   red "新版本未能通過完整驗證，正在回復 ${current_version}。"
   install -m 0755 "${backup}/vps_monitor.py" \
     "${INSTALL_DIR}/vps_monitor.py"
+  for module in node_contract.py legacy_adapter.py; do
+    if [[ -f "${backup}/${module}" ]]; then
+      install -m 0644 "${backup}/${module}" "${INSTALL_DIR}/${module}"
+    else
+      rm -f -- "${INSTALL_DIR}/${module}"
+    fi
+  done
   install -m 0644 "${backup}/requirements.txt" \
     "${INSTALL_DIR}/requirements.txt"
   [[ ! -f "${backup}/.requirements.sha256" ]] ||
@@ -240,6 +253,10 @@ upgrade_started=true
 systemctl stop vps-monitor
 install -m 0755 "${source_dir}/vps-monitor/vps_monitor.py" \
   "${INSTALL_DIR}/vps_monitor.py"
+install -m 0644 "${source_dir}/vps-monitor/node_contract.py" \
+  "${INSTALL_DIR}/node_contract.py"
+install -m 0644 "${source_dir}/vps-monitor/legacy_adapter.py" \
+  "${INSTALL_DIR}/legacy_adapter.py"
 install -m 0644 "${source_dir}/vps-monitor/requirements.txt" \
   "${INSTALL_DIR}/requirements.txt"
 requirements_hash="$(sha256sum "${INSTALL_DIR}/requirements.txt" |
