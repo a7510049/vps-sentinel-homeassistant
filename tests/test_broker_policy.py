@@ -33,6 +33,21 @@ class FakePasswordRunner:
 
     def __call__(self, command):
         self.commands.append(command)
+        if "-D" in command:
+            target = Path(command[-2])
+            username = command[-1]
+            if username == self.fail_username or not target.exists():
+                return SimpleNamespace(returncode=1)
+            remaining = [
+                line
+                for line in target.read_text(encoding="utf-8").splitlines()
+                if not line.startswith(f"{username}:")
+            ]
+            target.write_text(
+                "\n".join(remaining) + ("\n" if remaining else ""),
+                encoding="utf-8",
+            )
+            return SimpleNamespace(returncode=0)
         target = Path(command[-3])
         username = command[-2]
         if username == self.fail_username:
@@ -165,6 +180,37 @@ class BrokerPolicyTests(unittest.TestCase):
             transaction.password_file.read_text(encoding="utf-8"),
             "old\n",
         )
+
+    def test_transaction_removes_revoked_username_from_staging_copy(self):
+        runner = FakePasswordRunner()
+        transaction = self.transaction(runner, lambda: True)
+        transaction.password_file.parent.mkdir(parents=True)
+        transaction.password_file.write_text(
+            "home-assistant:HASHED\n"
+            "vps-node-old:HASHED\n",
+            encoding="utf-8",
+        )
+        transaction.apply(
+            credentials={},
+            remove_usernames=["vps-node-old"],
+            acl_text="user home-assistant\ntopic readwrite #\n",
+        )
+        passwd = transaction.password_file.read_text(encoding="utf-8")
+        self.assertIn("home-assistant:HASHED", passwd)
+        self.assertNotIn("vps-node-old", passwd)
+        self.assertTrue(any("-D" in command for command in runner.commands))
+
+    def test_transaction_rejects_update_and_removal_of_same_user(self):
+        transaction = self.transaction(FakePasswordRunner(), lambda: True)
+        with self.assertRaisesRegex(
+            broker_policy.BrokerPolicyError,
+            "updated and removed",
+        ):
+            transaction.apply(
+                credentials={"vps-node-a": "secret"},
+                remove_usernames=["vps-node-a"],
+                acl_text="user home-assistant\ntopic readwrite #\n",
+            )
 
 
 if __name__ == "__main__":
