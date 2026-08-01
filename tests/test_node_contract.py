@@ -135,6 +135,43 @@ class NodeContractTests(unittest.TestCase):
             set(schema["properties"]["node"]["properties"])
         ))
 
+    def test_parse_topic_requires_exact_namespace_and_stream(self):
+        self.assertEqual(
+            node_contract.parse_topic(
+                "vps-sentinel/v1/nodes/tokyo-web-01/resources"
+            ),
+            ("tokyo-web-01", "resources"),
+        )
+        self.assertEqual(
+            node_contract.parse_topic(
+                "vps-sentinel/v1/nodes/tokyo-web-01/events"
+            ),
+            ("tokyo-web-01", "event"),
+        )
+        for topic in [
+            "vps/tokyo-web-01/resources",
+            "vps-sentinel/v1/nodes/tokyo-web-01/unknown",
+            "vps-sentinel/v1/nodes/Tokyo/resources",
+            "vps-sentinel/v1/nodes/tokyo-web-01/resources/extra",
+        ]:
+            with self.subTest(topic=topic):
+                with self.assertRaises(node_contract.ContractError):
+                    node_contract.parse_topic(topic)
+
+    def test_validate_envelope_rejects_unknown_fields(self):
+        envelope = self.build()
+        normalized = node_contract.validate_envelope(envelope)
+        self.assertEqual(normalized, envelope)
+
+        envelope["credential"] = "must-not-be-accepted"
+        with self.assertRaises(node_contract.ContractError):
+            node_contract.validate_envelope(envelope)
+
+        envelope = self.build()
+        envelope["node"]["broker_password"] = "must-not-be-accepted"
+        with self.assertRaises(node_contract.ContractError):
+            node_contract.validate_envelope(envelope)
+
 
 if __name__ == "__main__":
     unittest.main()

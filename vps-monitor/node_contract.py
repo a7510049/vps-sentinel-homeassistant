@@ -48,6 +48,22 @@ def topic_for(node_id, message_type):
     return f"{TOPIC_ROOT}/{node_id}/{stream}"
 
 
+def parse_topic(topic):
+    """Return (node_id, message_type) for one exact v1 MQTT topic."""
+    if not isinstance(topic, str):
+        raise ContractError("topic must be a string")
+    parts = topic.split("/")
+    root = TOPIC_ROOT.split("/")
+    if len(parts) != len(root) + 2 or parts[:len(root)] != root:
+        raise ContractError("topic is outside the v1 node namespace")
+    node_id, stream = parts[-2:]
+    validate_node_id(node_id)
+    message_type = "event" if stream == "events" else stream
+    if message_type not in MESSAGE_TYPES:
+        raise ContractError(f"unsupported topic stream: {stream!r}")
+    return node_id, message_type
+
+
 def _required_text(value, field, maximum):
     if not isinstance(value, str) or not value.strip():
         raise ContractError(f"{field} must be a non-empty string")
@@ -156,3 +172,49 @@ def build_envelope(
         "sequence": sequence,
         "data": data,
     }
+
+
+def validate_envelope(envelope):
+    """Validate an untrusted envelope and return its normalized form."""
+    required = {
+        "schema_version",
+        "message_type",
+        "node",
+        "observed_at",
+        "sequence",
+        "data",
+    }
+    if not isinstance(envelope, dict) or set(envelope) != required:
+        raise ContractError("envelope fields do not match schema v1")
+    if envelope.get("schema_version") != SCHEMA_VERSION:
+        raise ContractError("unsupported schema_version")
+
+    node = envelope.get("node")
+    node_required = {
+        "id",
+        "display_name",
+        "agent_version",
+        "capabilities",
+        "labels",
+    }
+    node_allowed = node_required | {"provider", "region"}
+    if (
+        not isinstance(node, dict)
+        or not node_required.issubset(node)
+        or not set(node).issubset(node_allowed)
+    ):
+        raise ContractError("node fields do not match schema v1")
+
+    return build_envelope(
+        node_id=node["id"],
+        display_name=node["display_name"],
+        agent_version=node["agent_version"],
+        message_type=envelope["message_type"],
+        observed_at=envelope["observed_at"],
+        sequence=envelope["sequence"],
+        capabilities=node["capabilities"],
+        data=envelope["data"],
+        provider=node.get("provider"),
+        region=node.get("region"),
+        labels=node["labels"],
+    )
