@@ -76,6 +76,19 @@ class StabilityPreparationTests(unittest.TestCase):
             RELEASE.index("Publish GitHub Release"),
         )
 
+    def test_release_notes_use_the_matching_changelog_section(self):
+        self.assertIn('index($0, "## " version " — ") == 1', RELEASE)
+        self.assertIn('--notes-file "${notes_file}"', RELEASE)
+        self.assertIn('release_title="VPS Sentinel v${VERSION} — ', RELEASE)
+        self.assertNotIn("--generate-notes", RELEASE)
+
+    def test_changelog_version_headings_share_one_format(self):
+        headings = [
+            line for line in CHANGELOG.splitlines() if line.startswith("## ")
+        ]
+        self.assertTrue(headings)
+        self.assertTrue(all(" — " in heading for heading in headings))
+
 
 if __name__ == "__main__":
     unittest.main()
