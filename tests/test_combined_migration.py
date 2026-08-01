@@ -164,7 +164,26 @@ class CombinedAgentMigrationTests(unittest.TestCase):
                 ("vps-node-a", "node-a"),
                 ("vps-node-a", "node-a"),
             ),
-            {"vps-node-a": ["node-a", "node-a"]},
+            {"vps-node-a": ["node-a"]},
+        )
+
+    def test_rerun_preserves_node_credential_and_is_safe(self):
+        self.run_main()
+        first_values = bootstrap.read_environment(self.monitor_env)
+        first_store = self.store_path.read_bytes()
+        FakeTransaction.calls = []
+
+        self.run_main()
+
+        self.assertEqual(
+            bootstrap.read_environment(self.monitor_env),
+            first_values,
+        )
+        self.assertEqual(self.store_path.read_bytes(), first_store)
+        self.assertEqual(len(FakeTransaction.calls), 2)
+        self.assertEqual(
+            FakeTransaction.calls[-1]["remove_usernames"],
+            ["vps-monitor"],
         )
 
 
