@@ -82,6 +82,20 @@ def metric_summary(values, digits=3):
     }
 
 
+def host_fingerprint():
+    machine_id = ""
+    try:
+        machine_id = Path("/etc/machine-id").read_text(
+            encoding="utf-8"
+        ).strip()
+    except OSError:
+        pass
+    value = machine_id or platform.node()
+    return hashlib.sha256(
+        ("vps-sentinel-benchmark:" + value).encode("utf-8")
+    ).hexdigest()[:16]
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with Path(path).open("rb") as stream:
@@ -163,6 +177,7 @@ def run_benchmark(args):
     measurement_started_at = None
     measurement_ended_at = None
     measurement_started = None
+    measurement_elapsed = 0.0
     previous = None
     ticks_per_second = os.sysconf("SC_CLK_TCK")
 
@@ -226,15 +241,15 @@ def run_benchmark(args):
 
                 if status == "measuring":
                     status = "completed"
+                measurement_elapsed = round(
+                    time.monotonic() - measurement_started,
+                    3,
+                )
                 measurement_ended_at = utc_timestamp()
+            os.chmod(output, 0o600)
     finally:
         terminated_by_harness = terminate(process)
 
-    elapsed = (
-        round(time.monotonic() - measurement_started, 3)
-        if measurement_started is not None
-        else 0.0
-    )
     summary = {
         "schema_version": 1,
         "name": args.name,
@@ -245,7 +260,7 @@ def run_benchmark(args):
         "measurement_ended_at": measurement_ended_at,
         "requested_warmup_seconds": args.warmup,
         "requested_duration_seconds": args.duration,
-        "actual_measurement_seconds": elapsed,
+        "actual_measurement_seconds": measurement_elapsed,
         "interval_seconds": args.interval,
         "samples": rows,
         "rss_kib": metric_summary(rss_values),
@@ -256,6 +271,7 @@ def run_benchmark(args):
         "raw_csv_sha256": sha256(output),
         "environment_file_used": bool(args.env_file),
         "host": {
+            "fingerprint": host_fingerprint(),
             "os": platform.system(),
             "kernel": platform.release(),
             "architecture": platform.machine(),
@@ -270,6 +286,7 @@ def run_benchmark(args):
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    os.chmod(temporary, 0o600)
     os.replace(temporary, summary_path)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return summary
