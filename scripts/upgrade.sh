@@ -14,6 +14,11 @@ readonly DOCTOR_COMMAND="/usr/local/sbin/vps-sentinel-doctor"
 readonly BACKUP_COMMAND="/usr/local/sbin/vps-sentinel-backup"
 readonly AUTOMATIONS_COMMAND="/usr/local/sbin/vps-sentinel-automations"
 readonly APPLE_COMMAND="/usr/local/sbin/vps-sentinel-apple"
+readonly CONTROLLER_DIR="/opt/vps-sentinel-controller"
+readonly CONTROLLER_ENV="/etc/vps-sentinel-controller.env"
+readonly CONTROLLER_SERVICE="/etc/systemd/system/vps-sentinel-controller.service"
+readonly ENROLL_COMMAND="/usr/local/sbin/vps-sentinel-enroll"
+readonly FLEET_CARD_TARGET="/opt/homeassistant/config/www/vps-sentinel-fleet-card.js"
 
 green()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 yellow() { printf '\033[1;33m⚠ %s\033[0m\n' "$*"; }
@@ -38,9 +43,18 @@ if [[ "${available_kb:-0}" -lt 204800 ]]; then
   red "可用空間低於 200 MiB，為避免升級中斷，請先清理磁碟。"
   exit 1
 fi
-if [[ ! -f /etc/vps-monitor.env ||
-      ! -x "${INSTALL_DIR}/venv/bin/python" ]]; then
-  red "目前安裝不完整，請先執行 sudo vps-sentinel-doctor。"
+has_agent=false
+has_controller=false
+if [[ -f /etc/vps-monitor.env &&
+      -x "${INSTALL_DIR}/venv/bin/python" ]]; then
+  has_agent=true
+fi
+if [[ -f "${CONTROLLER_ENV}" &&
+      -x "${CONTROLLER_DIR}/venv/bin/python" ]]; then
+  has_controller=true
+fi
+if [[ "${has_agent}" != "true" && "${has_controller}" != "true" ]]; then
+  red "找不到完整的 Agent 或 Controller 安裝，請先執行 sudo vps-sentinel-doctor。"
   exit 1
 fi
 
@@ -95,7 +109,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-current_version="$(cat "${INSTALL_DIR}/.version" 2>/dev/null || echo "0.2.x")"
+current_version="$(cat "${INSTALL_DIR}/.version" 2>/dev/null ||
+  cat "${CONTROLLER_DIR}/.version" 2>/dev/null || echo "0.2.x")"
 echo "目前版本：${current_version}"
 echo "正在查詢最新穩定版本……"
 latest_url="$(curl -fsSIL -o /dev/null -w '%{url_effective}' \
@@ -138,7 +153,14 @@ for file in VERSION scripts/manage.sh scripts/update.sh scripts/uninstall.sh \
   home-assistant/blueprints/problem-notification.yaml \
   home-assistant/blueprints/offline-notification.yaml \
   home-assistant/blueprints/daily-summary.yaml \
-  home-assistant/www/vps-sentinel-apple-card.js; do
+  home-assistant/www/vps-sentinel-apple-card.js \
+  home-assistant/www/vps-sentinel-fleet-card.js \
+  controller/bootstrap.py controller/broker_policy.py \
+  controller/controller.py controller/enroll_cli.py \
+  controller/enrollment.py controller/enrollment_bundle.py \
+  controller/node_registry.py controller/requirements.txt \
+  controller/vps-sentinel-controller.service \
+  controller/vps-sentinel-enroll; do
   [[ -f "${source_dir}/${file}" ]] || {
     red "下載內容缺少 ${file}，已取消升級。"
     exit 1
@@ -159,7 +181,14 @@ bash -n "${source_dir}/scripts/"*.sh
 python3 -m py_compile \
   "${source_dir}/vps-monitor/vps_monitor.py" \
   "${source_dir}/vps-monitor/node_contract.py" \
-  "${source_dir}/vps-monitor/legacy_adapter.py"
+  "${source_dir}/vps-monitor/legacy_adapter.py" \
+  "${source_dir}/controller/bootstrap.py" \
+  "${source_dir}/controller/broker_policy.py" \
+  "${source_dir}/controller/controller.py" \
+  "${source_dir}/controller/enroll_cli.py" \
+  "${source_dir}/controller/enrollment.py" \
+  "${source_dir}/controller/enrollment_bundle.py" \
+  "${source_dir}/controller/node_registry.py"
 green "下載內容、版本與基本語法檢查完成"
 
 timestamp="$(date +%Y%m%d-%H%M%S)"
@@ -176,10 +205,21 @@ cp -a "${INSTALL_DIR}/vps-sentinel-apple-card.js" \
 if [[ -f "${CARD_TARGET}" ]]; then
   cp -a "${CARD_TARGET}" "${backup}/homeassistant-card.js"
 fi
+if [[ -f "${FLEET_CARD_TARGET}" ]]; then
+  cp -a "${FLEET_CARD_TARGET}" "${backup}/homeassistant-fleet-card.js"
+fi
+if [[ "${has_controller}" == "true" ]]; then
+  install -d -m 0700 "${backup}/controller"
+  find "${CONTROLLER_DIR}" -maxdepth 1 -type f -exec cp -a {} \
+    "${backup}/controller/" \;
+  cp -a "${CONTROLLER_SERVICE}" "${backup}/controller.service" \
+    2>/dev/null || true
+fi
 cp -a "${SERVICE_FILE}" "${backup}/vps-monitor.service" 2>/dev/null || true
 for file in "${MANAGE_COMMAND}" "${UPDATE_COMMAND}" \
   "${UNINSTALL_COMMAND}" "${UPGRADE_COMMAND}" "${DOCTOR_COMMAND}" \
-  "${BACKUP_COMMAND}" "${AUTOMATIONS_COMMAND}" "${APPLE_COMMAND}"; do
+  "${BACKUP_COMMAND}" "${AUTOMATIONS_COMMAND}" "${APPLE_COMMAND}" \
+  "${ENROLL_COMMAND}"; do
   [[ -e "${file}" ]] && cp -a "${file}" "${backup}/$(basename "${file}")"
 done
 [[ ! -d "${INSTALL_DIR}/blueprints" ]] ||
@@ -211,6 +251,13 @@ rollback() {
   else
     rm -f -- "${INSTALL_DIR}/vps-sentinel-apple-card.js"
   fi
+  if [[ -f "${backup}/homeassistant-fleet-card.js" ]]; then
+    install -d -m 0755 "$(dirname "${FLEET_CARD_TARGET}")"
+    install -m 0644 "${backup}/homeassistant-fleet-card.js" \
+      "${FLEET_CARD_TARGET}"
+  else
+    rm -f -- "${FLEET_CARD_TARGET}"
+  fi
   if [[ -f "${backup}/homeassistant-card.js" ]]; then
     install -d -m 0755 "$(dirname "${CARD_TARGET}")"
     install -m 0644 "${backup}/homeassistant-card.js" "${CARD_TARGET}"
@@ -221,7 +268,7 @@ rollback() {
     install -m 0644 "${backup}/vps-monitor.service" "${SERVICE_FILE}"
   for name in vps-sentinel vps-sentinel-update vps-sentinel-uninstall \
     vps-sentinel-upgrade vps-sentinel-doctor vps-sentinel-backup \
-    vps-sentinel-automations vps-sentinel-apple; do
+    vps-sentinel-automations vps-sentinel-apple vps-sentinel-enroll; do
     if [[ -f "${backup}/${name}" ]]; then
       install -m 0755 "${backup}/${name}" "/usr/local/sbin/${name}"
     else
@@ -231,10 +278,22 @@ rollback() {
   rm -rf -- "${INSTALL_DIR}/blueprints"
   [[ ! -d "${backup}/blueprints" ]] ||
     cp -a "${backup}/blueprints" "${INSTALL_DIR}/"
-  "${INSTALL_DIR}/venv/bin/pip" install --disable-pip-version-check \
-    -r "${INSTALL_DIR}/requirements.txt" >/dev/null
+  if [[ "${has_agent}" == "true" ]]; then
+    "${INSTALL_DIR}/venv/bin/pip" install --disable-pip-version-check \
+      -r "${INSTALL_DIR}/requirements.txt" >/dev/null
+  fi
+  if [[ "${has_controller}" == "true" && -d "${backup}/controller" ]]; then
+    find "${CONTROLLER_DIR}" -maxdepth 1 -type f -delete
+    cp -a "${backup}/controller/." "${CONTROLLER_DIR}/"
+    [[ ! -f "${backup}/controller.service" ]] ||
+      install -m 0644 "${backup}/controller.service" "${CONTROLLER_SERVICE}"
+    "${CONTROLLER_DIR}/venv/bin/pip" install --disable-pip-version-check \
+      -r "${CONTROLLER_DIR}/requirements.txt" >/dev/null
+  fi
   systemctl daemon-reload
-  systemctl restart vps-monitor || true
+  [[ "${has_controller}" != "true" ]] ||
+    systemctl restart vps-sentinel-controller || true
+  [[ "${has_agent}" != "true" ]] || systemctl restart vps-monitor || true
 }
 
 upgrade_started=false
@@ -250,7 +309,10 @@ on_upgrade_error() {
 trap 'on_upgrade_error "${LINENO}"' ERR
 
 upgrade_started=true
-systemctl stop vps-monitor
+[[ "${has_agent}" != "true" ]] || systemctl stop vps-monitor
+[[ "${has_controller}" != "true" ]] ||
+  systemctl stop vps-sentinel-controller
+if [[ "${has_agent}" == "true" ]]; then
 install -m 0755 "${source_dir}/vps-monitor/vps_monitor.py" \
   "${INSTALL_DIR}/vps_monitor.py"
 install -m 0644 "${source_dir}/vps-monitor/node_contract.py" \
@@ -270,6 +332,36 @@ if [[ "${requirements_hash}" != "${installed_hash}" ]]; then
 fi
 install -m 0644 "${source_dir}/vps-monitor/vps-monitor.service" \
   "${SERVICE_FILE}"
+fi
+if [[ "${has_controller}" == "true" ]]; then
+  for file in bootstrap.py broker_policy.py controller.py enroll_cli.py \
+    enrollment.py enrollment_bundle.py node_registry.py; do
+    install -m 0644 "${source_dir}/controller/${file}" \
+      "${CONTROLLER_DIR}/${file}"
+  done
+  chmod 0755 "${CONTROLLER_DIR}/controller.py" \
+    "${CONTROLLER_DIR}/enroll_cli.py"
+  install -m 0644 "${source_dir}/vps-monitor/node_contract.py" \
+    "${CONTROLLER_DIR}/node_contract.py"
+  install -m 0644 "${source_dir}/controller/requirements.txt" \
+    "${CONTROLLER_DIR}/requirements.txt"
+  controller_requirements_hash="$(sha256sum \
+    "${CONTROLLER_DIR}/requirements.txt" | awk '{print $1}')"
+  controller_installed_hash="$(cat \
+    "${CONTROLLER_DIR}/.requirements.sha256" 2>/dev/null || true)"
+  if [[ "${controller_requirements_hash}" != "${controller_installed_hash}" ]]; then
+    "${CONTROLLER_DIR}/venv/bin/pip" install --disable-pip-version-check \
+      -r "${CONTROLLER_DIR}/requirements.txt"
+    printf '%s\n' "${controller_requirements_hash}" > \
+      "${CONTROLLER_DIR}/.requirements.sha256"
+  fi
+  install -m 0644 \
+    "${source_dir}/controller/vps-sentinel-controller.service" \
+    "${CONTROLLER_SERVICE}"
+  install -m 0755 "${source_dir}/controller/vps-sentinel-enroll" \
+    "${ENROLL_COMMAND}"
+  printf '%s\n' "${latest_version}" > "${CONTROLLER_DIR}/.version"
+fi
 install -m 0755 "${source_dir}/scripts/manage.sh" "${MANAGE_COMMAND}"
 install -m 0755 "${source_dir}/scripts/update.sh" "${UPDATE_COMMAND}"
 install -m 0755 "${source_dir}/scripts/uninstall.sh" "${UNINSTALL_COMMAND}"
@@ -287,17 +379,31 @@ if [[ -f "${CARD_TARGET}" ]]; then
   install -m 0644 "${INSTALL_DIR}/vps-sentinel-apple-card.js" \
     "${CARD_TARGET}"
 fi
+if [[ "${has_controller}" == "true" ]]; then
+  install -d -m 0755 "$(dirname "${FLEET_CARD_TARGET}")"
+  install -m 0644 \
+    "${source_dir}/home-assistant/www/vps-sentinel-fleet-card.js" \
+    "${FLEET_CARD_TARGET}"
+fi
 install -d -m 0755 "${INSTALL_DIR}/blueprints"
 install -m 0644 "${source_dir}"/home-assistant/blueprints/*.yaml \
   "${INSTALL_DIR}/blueprints/"
-printf '%s\n' "${latest_version}" > "${INSTALL_DIR}/.version"
+if [[ "${has_agent}" == "true" ]]; then
+  printf '%s\n' "${latest_version}" > "${INSTALL_DIR}/.version"
+fi
 systemctl daemon-reload
-monitor_started_at="$(date --iso-8601=seconds)"
-systemctl restart vps-monitor
-systemctl is-active --quiet vps-monitor
-if ! wait_for_monitor_mqtt "${monitor_started_at}"; then
-  journalctl -u vps-monitor -n 30 --no-pager || true
-  false
+if [[ "${has_controller}" == "true" ]]; then
+  systemctl restart vps-sentinel-controller
+  systemctl is-active --quiet vps-sentinel-controller
+fi
+if [[ "${has_agent}" == "true" ]]; then
+  monitor_started_at="$(date --iso-8601=seconds)"
+  systemctl restart vps-monitor
+  systemctl is-active --quiet vps-monitor
+  if ! wait_for_monitor_mqtt "${monitor_started_at}"; then
+    journalctl -u vps-monitor -n 30 --no-pager || true
+    false
+  fi
 fi
 upgrade_started=false
 trap - ERR
@@ -318,7 +424,12 @@ for old_backup in "${old_backups[@]}"; do
   esac
 done
 green "VPS Sentinel 已安全升級至 ${latest_version}"
-green "監控服務、MQTT 認證與在線資料均已驗證"
+if [[ "${has_controller}" == "true" ]]; then
+  green "Controller、節點名冊與 Fleet Card 已同步並驗證"
+fi
+if [[ "${has_agent}" == "true" ]]; then
+  green "Agent、MQTT 認證與在線資料均已驗證"
+fi
 if [[ -f "${CARD_TARGET}" ]]; then
   green "Apple 卡片前端檔案已同步，不需要重新啟動 Home Assistant"
   yellow "請將 Home Assistant 儀表板資源更新為："
