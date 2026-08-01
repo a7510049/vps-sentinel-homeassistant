@@ -18,10 +18,10 @@ jobs:
           fetch-depth: 0
 
       - name: Check shell syntax
-        run: bash -n setup.sh scripts/*.sh vps-monitor/install.sh controller/*.sh
+        run: bash -n install.sh setup.sh scripts/*.sh vps-monitor/install.sh controller/*.sh
 
       - name: Run ShellCheck
-        run: shellcheck setup.sh scripts/*.sh vps-monitor/install.sh controller/*.sh
+        run: shellcheck install.sh setup.sh scripts/*.sh vps-monitor/install.sh controller/*.sh
 
       - name: Check dashboard card syntax
         run: >-
@@ -50,6 +50,7 @@ jobs:
       - name: Check Python syntax
         run: >-
           python3 -m py_compile
+          controller/bootstrap.py
           controller/broker_policy.py
           controller/controller.py
           controller/enrollment.py
@@ -66,6 +67,7 @@ jobs:
           tests/test_node_contract.py
           tests/test_node_registry.py
           tests/test_v1_publisher.py
+          tests/test_unified_installer.py
           tests/test_vps_monitor.py
           tests/test_command_interface.py
           tests/test_release_integrity.py

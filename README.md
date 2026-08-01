@@ -127,7 +127,19 @@ Home Assistant、Mosquitto 與 VPS Sentinel 可以安裝在同一台 VPS 上。
 ```bash
 git clone https://github.com/a7510049/vps-sentinel-homeassistant.git
 cd vps-sentinel-homeassistant
-sudo bash setup.sh
+sudo bash install.sh
+```
+
+安裝器會先讓你選擇角色：
+
+- `combined`：Home Assistant、Controller 與本機 Agent
+- `controller`：Home Assistant 與 Controller
+- `agent`：只把這台 VPS 加入既有 Controller
+
+可先預覽完整計畫，不修改系統：
+
+```bash
+bash install.sh --role combined --dry-run
 ```
 
 繁體中文安裝器會協助完成：

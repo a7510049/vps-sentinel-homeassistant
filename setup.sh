@@ -9,6 +9,8 @@ readonly MQTT_CONF="/etc/mosquitto/conf.d/home-assistant.conf"
 readonly MQTT_PASSWD="/etc/mosquitto/passwd"
 readonly MONITOR_ENV="/etc/vps-monitor.env"
 readonly CREDENTIALS_FILE="/root/vps-homeassistant-credentials.txt"
+readonly SKIP_AGENT="${VPS_SENTINEL_SKIP_AGENT:-false}"
+readonly DEFER_SUMMARY="${VPS_SENTINEL_DEFER_SUMMARY:-false}"
 
 blue()   { printf '\n\033[1;36m%s\033[0m\n' "$*"; }
 green()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
@@ -578,6 +580,7 @@ else
   yellow "之後可重新執行安裝器再次設定。"
 fi
 
+if [[ "${SKIP_AGENT}" != "true" ]]; then
 blue "步驟 5/6：設定 VPS Monitor"
 if [[ -e "${MONITOR_ENV}" ]]; then
   green "沿用既有 ${MONITOR_ENV}"
@@ -682,6 +685,11 @@ if ! wait_for_monitor_mqtt "${monitor_started_at}"; then
   exit 1
 fi
 green "VPS Monitor 已啟動，MQTT 認證與在線資料正常"
+else
+  blue "步驟 5/6：Controller 模式"
+  green "已依角色略過本機 VPS Agent"
+  install -d -m 0755 "${MONITOR_DIR}"
+fi
 install -m 0755 "${REPO_DIR}/scripts/update.sh" \
   /usr/local/sbin/vps-sentinel-update
 install -m 0755 "${REPO_DIR}/scripts/uninstall.sh" \
@@ -707,7 +715,11 @@ install -m 0644 "${REPO_DIR}"/home-assistant/blueprints/*.yaml \
 blue "步驟 6/6：最後檢查"
 sleep 3
 checks_failed=false
-for service in docker mosquitto vps-monitor; do
+services_to_check=(docker mosquitto)
+if [[ "${SKIP_AGENT}" != "true" ]]; then
+  services_to_check+=(vps-monitor)
+fi
+for service in "${services_to_check[@]}"; do
   if systemctl is-active --quiet "${service}"; then
     green "${service}：正常"
   else
@@ -726,11 +738,14 @@ if [[ "${checks_failed}" == "true" ]]; then
   echo
   echo "排錯指令："
   echo "  journalctl -u mosquitto -n 50 --no-pager"
-  echo "  journalctl -u vps-monitor -n 50 --no-pager"
+  if [[ "${SKIP_AGENT}" != "true" ]]; then
+    echo "  journalctl -u vps-monitor -n 50 --no-pager"
+  fi
   echo "  docker logs homeassistant --tail 50"
   exit 1
 fi
 
+if [[ "${DEFER_SUMMARY}" != "true" ]]; then
 echo
 printf '\033[1;32m%s\033[0m\n' \
   "========================================================"
@@ -755,7 +770,11 @@ else
 fi
 echo "  TLS：關閉"
 echo
-echo "完成 MQTT 整合後，VPS 裝置會自動出現。"
+if [[ "${SKIP_AGENT}" == "true" ]]; then
+  echo "完成 MQTT 整合後，請使用單一安裝器加入 Agent 節點。"
+else
+  echo "完成 MQTT 整合後，VPS 裝置會自動出現。"
+fi
 echo
 echo "日後只要執行 sudo vps-sentinel，即可進入中文維護中心："
 echo "  📊 查看系統狀態"
@@ -769,3 +788,4 @@ echo "套用 Apple 面板：sudo vps-sentinel apple --apply"
 echo "更新 VPS Sentinel：sudo vps-sentinel upgrade"
 echo "更新 Home Assistant：sudo vps-sentinel ha-update"
 echo "日後完整移除：sudo vps-sentinel-uninstall"
+fi
