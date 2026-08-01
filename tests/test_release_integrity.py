@@ -100,7 +100,7 @@ class StabilityPreparationTests(unittest.TestCase):
             "相容性",
             "開發品質",
         }
-        versions = CHANGELOG.split("\\n## ")[1:]
+        versions = CHANGELOG.split("\n## ")[1:]
         self.assertTrue(versions)
         for version in versions:
             categories = [
