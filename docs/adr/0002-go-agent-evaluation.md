@@ -65,19 +65,41 @@
 
 repository 內的 `go-agent/` 是受限原型，不是正式安裝預設。CI 會在 Linux amd64 執行 Go 測試、`go vet`、靜態建置 amd64／arm64，並把 `--once` 輸出交由現有 Python `validate_envelope` 驗證，避免兩套語言各自解釋契約。
 
-長時間比較使用：
+長時間比較前先停止正式 Agent，避免兩個程序使用相同 node credential：
 
 ```bash
-python3 benchmarks/agent_benchmark.py \
+sudo systemctl stop vps-monitor
+sudo install -d -m 0700 /root/vps-sentinel-benchmarks
+```
+
+每次指令會先暖機 30 分鐘，再串流寫入 24 小時 CSV；提前退出、採樣失敗或量測不足不會被標成完成：
+
+```bash
+sudo python3 benchmarks/agent_benchmark.py \
   --name python \
   --command "/opt/vps-monitor/venv/bin/python /opt/vps-monitor/vps_monitor.py" \
-  --duration 86400 --output results/python-run-1.csv
+  --env-file /etc/vps-monitor.env \
+  --warmup 1800 --duration 86400 \
+  --output /root/vps-sentinel-benchmarks/python-run-1.csv
 
-python3 benchmarks/agent_benchmark.py \
+sudo python3 benchmarks/agent_benchmark.py \
   --name go \
   --command "./go-agent" \
-  --duration 86400 --output results/go-run-1.csv
+  --env-file /etc/vps-monitor.env \
+  --warmup 1800 --duration 86400 \
+  --output /root/vps-sentinel-benchmarks/go-run-1.csv
 ```
+
+Python 與 Go 各完成三輪後，產生資源 Gate 報告：
+
+```bash
+sudo python3 benchmarks/compare_agent_benchmarks.py \
+  --python /root/vps-sentinel-benchmarks/python-run-{1,2,3}.csv.summary.json \
+  --go /root/vps-sentinel-benchmarks/go-run-{1,2,3}.csv.summary.json \
+  --output /root/vps-sentinel-benchmarks/comparison.json
+```
+
+比較器會拒絕少於三輪、未完成 24 小時、不同主機或不同架構的資料。它只能判斷 RSS 資源門檻，最終決策仍須通過本 ADR 的契約、雙架構、可靠性、升級回復、SBOM／漏洞掃描與維護性條件。完成後使用 `sudo systemctl start vps-monitor` 恢復正式 Agent。
 
 每個 Agent 分開執行、相同環境變數與 Broker，依本 ADR 重複三次。原始 CSV 不可只保留摘要；未完成 24 小時實機樣本與故障注入前，不得把 Go 設為預設。
 
