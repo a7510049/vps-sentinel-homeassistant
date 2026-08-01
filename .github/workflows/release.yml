@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  issues: read
 
 concurrency:
   group: release
@@ -71,6 +72,34 @@ jobs:
           grep -Fq "## ${version} — " CHANGELOG.md
           grep -q 'VERSION_FILE="/opt/vps-monitor/.version"' \
             scripts/apple-dashboard.sh
+
+      - name: Check 1.0 evidence gate
+        if: steps.version_change.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          GATE_ISSUE: "65"
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ ! "${VERSION}" =~ ^1\.0\.0(-rc\.[1-9][0-9]*)?$ ]]; then
+            exit 0
+          fi
+
+          gate_json="$(gh issue view "${GATE_ISSUE}" \
+            --repo "${GITHUB_REPOSITORY}" --json state,body)"
+          gate_state="$(jq -r '.state' <<< "${gate_json}")"
+          if [[ "${gate_state}" != "CLOSED" ]]; then
+            echo "1.0 發布 Gate #${GATE_ISSUE} 尚未關閉。" >&2
+            exit 1
+          fi
+
+          unchecked="$(jq -r '.body' <<< "${gate_json}" |
+            grep -Ec '^- \[ \] ' || true)"
+          if (( unchecked > 0 )); then
+            echo "1.0 發布 Gate #${GATE_ISSUE} 仍有 ${unchecked} 項未完成。" >&2
+            exit 1
+          fi
 
       - name: Publish GitHub Release
         if: steps.version_change.outputs.changed == 'true'

@@ -104,6 +104,17 @@ class StabilityPreparationTests(unittest.TestCase):
             RELEASE.index("Publish GitHub Release"),
         )
 
+    def test_v1_release_requires_the_real_evidence_gate(self):
+        self.assertIn("issues: read", RELEASE)
+        self.assertIn('GATE_ISSUE: "65"', RELEASE)
+        self.assertIn('gh issue view "${GATE_ISSUE}"', RELEASE)
+        self.assertIn('gate_state}" != "CLOSED"', RELEASE)
+        self.assertIn("grep -Ec '^- \\[ \\] '", RELEASE)
+        self.assertLess(
+            RELEASE.index("Check 1.0 evidence gate"),
+            RELEASE.index("Publish GitHub Release"),
+        )
+
     def test_release_notes_use_the_matching_changelog_section(self):
         self.assertIn('index($0, "## " version " — ") == 1', RELEASE)
         self.assertIn('--notes-file "${notes_file}"', RELEASE)
