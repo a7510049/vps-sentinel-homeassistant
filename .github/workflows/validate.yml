@@ -50,7 +50,7 @@ jobs:
       - name: Validate Go Agent prototype
         run: |
           cd go-agent
-          go mod download
+          go mod tidy
           cat go.sum
           go test ./...
           go vet ./...
