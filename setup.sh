@@ -10,6 +10,7 @@ readonly MQTT_PASSWD="/etc/mosquitto/passwd"
 readonly MONITOR_ENV="/etc/vps-monitor.env"
 readonly CREDENTIALS_FILE="/root/vps-homeassistant-credentials.txt"
 readonly SKIP_AGENT="${VPS_SENTINEL_SKIP_AGENT:-false}"
+readonly DEFER_SUMMARY="${VPS_SENTINEL_DEFER_SUMMARY:-false}"
 
 blue()   { printf '\n\033[1;36m%s\033[0m\n' "$*"; }
 green()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
@@ -744,6 +745,7 @@ if [[ "${checks_failed}" == "true" ]]; then
   exit 1
 fi
 
+if [[ "${DEFER_SUMMARY}" != "true" ]]; then
 echo
 printf '\033[1;32m%s\033[0m\n' \
   "========================================================"
@@ -786,3 +788,4 @@ echo "套用 Apple 面板：sudo vps-sentinel apple --apply"
 echo "更新 VPS Sentinel：sudo vps-sentinel upgrade"
 echo "更新 Home Assistant：sudo vps-sentinel ha-update"
 echo "日後完整移除：sudo vps-sentinel-uninstall"
+fi
