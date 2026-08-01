@@ -23,8 +23,10 @@ jobs:
       - name: Run ShellCheck
         run: shellcheck setup.sh scripts/*.sh vps-monitor/install.sh
 
-      - name: Check Apple card syntax
-        run: node --check home-assistant/www/vps-sentinel-apple-card.js
+      - name: Check dashboard card syntax
+        run: >-
+          node --check home-assistant/www/vps-sentinel-apple-card.js &&
+          node --check home-assistant/www/vps-sentinel-fleet-card.js
 
       - name: Check Blueprint YAML syntax
         run: ruby -e "require 'yaml'; Dir['home-assistant/blueprints/*.yaml'].each { |file| YAML.parse_file(file) }"
@@ -53,6 +55,7 @@ jobs:
           vps-monitor/legacy_adapter.py
           tests/test_controller.py
           tests/test_enrollment.py
+          tests/test_fleet_card.py
           tests/test_legacy_adapter.py
           tests/test_node_contract.py
           tests/test_node_registry.py
