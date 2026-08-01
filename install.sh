@@ -6,10 +6,11 @@ readonly REPO_DIR
 role=""
 dry_run=false
 assume_yes=false
+config_file=""
 
 usage() {
   cat <<'USAGE'
-用法：sudo bash install.sh [--role combined|controller|agent] [--dry-run] [--yes]
+用法：sudo bash install.sh [--role combined|controller|agent] [--config bundle.json] [--dry-run] [--yes]
 
 角色：
   combined    在本機安裝 Home Assistant、Broker、Controller 與 Agent
@@ -25,12 +26,25 @@ while (($#)); do
       role="$2"
       shift 2
       ;;
+    --config)
+      [[ $# -ge 2 ]] || { echo "--config 缺少檔案" >&2; exit 2; }
+      config_file="$2"
+      shift 2
+      ;;
     --dry-run) dry_run=true; shift ;;
     --yes) assume_yes=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "未知參數：$1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ -n "${config_file}" && -z "${role}" ]]; then
+  role="agent"
+fi
+if [[ -n "${config_file}" && "${role}" != "agent" ]]; then
+  echo "--config 目前只適用於 agent 角色。" >&2
+  exit 2
+fi
 
 if [[ -z "${role}" ]]; then
   [[ -t 0 ]] || {
@@ -107,6 +121,10 @@ fi
 
 case "${role}" in
   agent)
+    if [[ -n "${config_file}" ]]; then
+      python3 "${REPO_DIR}/controller/apply_agent_config.py"         "${config_file}"
+      exit 0
+    fi
     exec bash "${REPO_DIR}/vps-monitor/install.sh"
     ;;
   combined)
