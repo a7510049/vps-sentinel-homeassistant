@@ -8,6 +8,11 @@ readonly MONITOR_DIR="/opt/vps-monitor"
 readonly SERVICE_FILE="/etc/systemd/system/vps-monitor.service"
 readonly MQTT_CONF="/etc/mosquitto/conf.d/home-assistant.conf"
 readonly MQTT_PASSWD="/etc/mosquitto/passwd"
+readonly MQTT_ACL="/etc/mosquitto/vps-sentinel.acl"
+readonly CONTROLLER_DIR="/opt/vps-sentinel-controller"
+readonly CONTROLLER_DATA="/var/lib/vps-sentinel-controller"
+readonly CONTROLLER_ENV="/etc/vps-sentinel-controller.env"
+readonly CONTROLLER_SERVICE="/etc/systemd/system/vps-sentinel-controller.service"
 
 green()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 yellow() { printf '\033[1;33m⚠ %s\033[0m\n' "$*"; }
@@ -105,6 +110,26 @@ apply_staging() {
     install -m 0640 "${source}/mosquitto/passwd" "${MQTT_PASSWD}"
     chown root:mosquitto "${MQTT_PASSWD}"
   fi
+  if [[ -f "${source}/mosquitto/vps-sentinel.acl" ]]; then
+    install -m 0640 "${source}/mosquitto/vps-sentinel.acl" "${MQTT_ACL}"
+    chown root:mosquitto "${MQTT_ACL}"
+  fi
+  if [[ -f "${source}/controller/vps-sentinel-controller.env" ]]; then
+    install -m 0600 "${source}/controller/vps-sentinel-controller.env" \
+      "${CONTROLLER_ENV}"
+  fi
+  if [[ -f "${source}/controller/vps-sentinel-controller.service" ]]; then
+    install -m 0644 "${source}/controller/vps-sentinel-controller.service" \
+      "${CONTROLLER_SERVICE}"
+  fi
+  if [[ -f "${source}/controller/enrollments.json" ]]; then
+    install -d -m 0700 -o vps-sentinel-controller \
+      -g vps-sentinel-controller "${CONTROLLER_DATA}"
+    install -m 0600 -o vps-sentinel-controller \
+      -g vps-sentinel-controller \
+      "${source}/controller/enrollments.json" \
+      "${CONTROLLER_DATA}/enrollments.json"
+  fi
 }
 
 start_and_validate() {
@@ -114,13 +139,19 @@ start_and_validate() {
   compose="$(compose_path)"
   [[ -n "${compose}" ]] || return 1
   (cd "${HA_DIR}" && docker compose up -d homeassistant)
-  systemctl restart vps-monitor
   systemctl is-active --quiet mosquitto || return 1
-  systemctl is-active --quiet vps-monitor || return 1
+  if [[ -f "${CONTROLLER_ENV}" ]]; then
+    systemctl restart vps-sentinel-controller
+    systemctl is-active --quiet vps-sentinel-controller || return 1
+  fi
+  if [[ -f "${ENV_FILE}" ]]; then
+    systemctl restart vps-monitor
+    systemctl is-active --quiet vps-monitor || return 1
+    mqtt_probe || return 1
+  fi
   wait_for_home_assistant || return 1
   docker exec homeassistant python -m homeassistant \
-    --script check_config --config /config >/dev/null 2>&1 || return 1
-  mqtt_probe
+    --script check_config --config /config >/dev/null 2>&1
 }
 
 list_backups() {
@@ -142,7 +173,8 @@ create_backup() {
   trap 'rm -rf -- "${staging}"' RETURN
 
   install -d -m 0700 "${staging}/homeassistant/config" \
-    "${staging}/monitor" "${staging}/mosquitto"
+    "${staging}/monitor" "${staging}/mosquitto" \
+    "${staging}/controller"
   compose="$(compose_path)"
   if [[ -n "${compose}" ]]; then
     cp -a "${compose}" "${staging}/homeassistant/compose.yaml"
@@ -165,8 +197,19 @@ create_backup() {
     cp -a "${MQTT_CONF}" "${staging}/mosquitto/home-assistant.conf"
   [[ ! -f "${MQTT_PASSWD}" ]] ||
     cp -a "${MQTT_PASSWD}" "${staging}/mosquitto/passwd"
+  [[ ! -f "${MQTT_ACL}" ]] ||
+    cp -a "${MQTT_ACL}" "${staging}/mosquitto/vps-sentinel.acl"
+  [[ ! -f "${CONTROLLER_ENV}" ]] ||
+    install -m 0600 "${CONTROLLER_ENV}" \
+      "${staging}/controller/vps-sentinel-controller.env"
+  [[ ! -f "${CONTROLLER_SERVICE}" ]] ||
+    cp -a "${CONTROLLER_SERVICE}" \
+      "${staging}/controller/vps-sentinel-controller.service"
+  [[ ! -f "${CONTROLLER_DATA}/enrollments.json" ]] ||
+    install -m 0600 "${CONTROLLER_DATA}/enrollments.json" \
+      "${staging}/controller/enrollments.json"
   {
-    echo "format=2"
+    echo "format=3"
     echo "created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "kind=settings"
     echo "compose=compose.yaml"
@@ -177,7 +220,7 @@ create_backup() {
   rm -rf -- "${staging}"
   trap - RETURN
   green "設定備份已建立：${archive}"
-  echo "已包含 Compose、MQTT 帳號、監控設定與 Home Assistant 設定。"
+  echo "已包含 Home Assistant、Agent、Controller、節點名冊與完整 Broker policy。"
   echo "為節省空間，歷史資料庫與日誌不包含在此備份中。"
 }
 
@@ -216,7 +259,91 @@ restore_backup() {
   staging="$(mktemp -d)"
   tar -xzf "${archive}" -C "${staging}"
   if [[ ! -f "${staging}/MANIFEST" ]] ||
-     ! grep -Eq '^format=(1|2)$' "${staging}/MANIFEST"; then
+     ! grep -Eq '^format=(1|2|3) "${staging}/MANIFEST"; then
+    rm -rf -- "${staging}"
+    red "無法辨識此備份格式，已取消還原。"
+    return 1
+  fi
+
+  yellow "還原會覆蓋目前的 Home Assistant、MQTT 與監控設定。"
+  echo "系統會先建立一份目前狀態的安全備份。"
+  read -r -p "若要繼續，請輸入：還原設定 > " confirmation
+  if [[ "${confirmation}" != "還原設定" ]]; then
+    rm -rf -- "${staging}"
+    echo "已取消，沒有變更任何資料。"
+    return
+  fi
+  create_backup
+  safety="$(find "${BACKUP_ROOT}" -maxdepth 1 -type f -name '*.tar.gz' \
+    -printf '%T@ %p\n' | sort -rn | head -n 1 | cut -d' ' -f2-)"
+
+  systemctl stop vps-monitor 2>/dev/null || true
+  systemctl stop vps-sentinel-controller 2>/dev/null || true
+  docker stop homeassistant >/dev/null 2>&1 || true
+  systemctl stop mosquitto 2>/dev/null || true
+  apply_staging "${staging}"
+  if ! start_and_validate; then
+    recovery="$(mktemp -d)"
+    tar -xzf "${safety}" -C "${recovery}"
+    apply_staging "${recovery}"
+    start_and_validate || true
+    rm -rf -- "${recovery}" "${staging}"
+    red "還原後驗證未通過，已自動回復還原前的設定。"
+    echo "安全備份保留於：${safety}"
+    return 1
+  fi
+  rm -rf -- "${staging}"
+  green "設定已還原，Home Assistant、MQTT 與監控資料均通過驗證"
+}
+
+remove_old_backups() {
+  local keep
+  read -r -p "要保留最近幾份手動備份 [3]：" keep
+  keep="${keep:-3}"
+  [[ "${keep}" =~ ^[1-9][0-9]*$ ]] || {
+    red "請輸入大於 0 的整數。"
+    return
+  }
+  mapfile -t old_backups < <(
+    find "${BACKUP_ROOT}" -maxdepth 1 -type f -name '*.tar.gz' \
+      -printf '%T@ %p\n' | sort -rn | tail -n "+$((keep + 1))" |
+      cut -d' ' -f2-
+  )
+  for old_backup in "${old_backups[@]}"; do
+    case "${old_backup}" in
+      "${BACKUP_ROOT}/"*.tar.gz) rm -f -- "${old_backup}" ;;
+    esac
+  done
+  green "清理完成，已保留最近 ${keep} 份手動備份"
+}
+
+while true; do
+  clear
+  printf '\033[1;35m'
+  cat <<'BANNER'
+╭────────────────────────────────────────╮
+│  💾 VPS Sentinel 備份與還原            │
+╰────────────────────────────────────────╯
+BANNER
+  printf '\033[0m'
+  echo "  1. 查看現有備份"
+  echo "  2. 建立設定備份"
+  echo "  3. 還原設定備份"
+  echo "  4. 清理舊備份"
+  echo "  0. 返回上一層"
+  read -r -p "請選擇 [0]：" choice
+  case "${choice:-0}" in
+    1) list_backups ;;
+    2) create_backup ;;
+    3) restore_backup ;;
+    4) remove_old_backups ;;
+    0) exit 0 ;;
+    *) yellow "請輸入 0 到 4。" ;;
+  esac
+  echo
+  read -r -p "按 Enter 返回備份管理……" _
+done
+ "${staging}/MANIFEST"; then
     rm -rf -- "${staging}"
     red "無法辨識此備份格式，已取消還原。"
     return 1
