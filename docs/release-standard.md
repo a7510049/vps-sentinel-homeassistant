@@ -85,3 +85,7 @@ VPS Sentinel vX.Y.Z-rc.N
 - 候選版必須建立為 GitHub prerelease；正式版不得帶 prerelease 標記。
 - checkout、tag、Release target 與驗證完成的 commit SHA 必須完全相同。
 - `VERSION`、Apple Card 版本與 `CHANGELOG.md` 對應標題不一致時禁止發布。
+
+## 1.0 實機證據 Gate
+
+`1.0.0-rc.N` 與 `1.0.0` 除了通過自動化驗證，還必須完成 [1.0 Beta 實機驗收與 Go 決策 Gate（#65）](https://github.com/a7510049/vps-sentinel-homeassistant/issues/65)。發布流程會確認該 Issue 已關閉且沒有未勾選項目；只修改 `VERSION`、手動關閉但保留未完成項目，或缺少三來源 VPS 與長時間量測證據，都不能發布 1.0。
