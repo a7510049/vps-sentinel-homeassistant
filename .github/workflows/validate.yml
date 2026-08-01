@@ -50,6 +50,8 @@ jobs:
       - name: Validate Go Agent prototype
         run: |
           cd go-agent
+          go mod download
+          cat go.sum
           go test ./...
           go vet ./...
           CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../go-agent-amd64 .
