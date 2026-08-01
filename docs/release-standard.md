@@ -13,7 +13,8 @@ VPS Sentinel vX.Y.Z
 - 使用專案名稱加完整語意化版本。
 - 版本前保留小寫 `v`。
 - 不在列表標題加入版本主題、表情符號或分類文字。
-- 範例：`VPS Sentinel v0.9.8`。
+- 正式版範例：`VPS Sentinel v0.9.8`。
+- 預發布版範例：`VPS Sentinel v0.8.0-rc.6`。
 
 ## 內文順序
 
