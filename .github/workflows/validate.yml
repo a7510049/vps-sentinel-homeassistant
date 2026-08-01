@@ -51,7 +51,7 @@ jobs:
         run: |
           cd go-agent
           go mod tidy
-          cat go.sum
+          git diff --exit-code -- go.mod go.sum
           go test ./...
           go vet ./...
           CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../go-agent-amd64 .
