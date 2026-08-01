@@ -66,6 +66,54 @@ jobs:
             python3 tests/validate_go_agent_output.py
           sha256sum go-agent-amd64 go-agent-arm64
 
+      - name: Scan Go source and binaries for known vulnerabilities
+        run: |
+          GOTOOLCHAIN=auto go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          cd go-agent
+          govulncheck ./...
+          cd ..
+          govulncheck -mode binary go-agent-amd64
+          govulncheck -mode binary go-agent-arm64
+
+      - name: Generate amd64 SPDX SBOM
+        uses: anchore/sbom-action@4a30bbadbe35d73a1729ee95a9196544192d905e
+        with:
+          file: go-agent-amd64
+          format: spdx-json
+          output-file: go-agent-amd64.spdx.json
+          artifact-name: go-agent-amd64-sbom
+          syft-version: v1.44.0
+          upload-release-assets: false
+
+      - name: Generate arm64 SPDX SBOM
+        uses: anchore/sbom-action@4a30bbadbe35d73a1729ee95a9196544192d905e
+        with:
+          file: go-agent-arm64
+          format: spdx-json
+          output-file: go-agent-arm64.spdx.json
+          artifact-name: go-agent-arm64-sbom
+          syft-version: v1.44.0
+          upload-release-assets: false
+
+      - name: Validate Go SBOM documents
+        run: |
+          python3 - <<'PY'
+          import json
+
+          documents = {
+              "go-agent-amd64.spdx.json": "SPDX-2.3",
+              "go-agent-arm64.spdx.json": "SPDX-2.3",
+          }
+          for path, expected_version in documents.items():
+              with open(path, encoding="utf-8") as handle:
+                  document = json.load(handle)
+              actual_version = document.get("spdxVersion")
+              if actual_version != expected_version:
+                  raise SystemExit(
+                      f"{path}: expected {expected_version}, got {actual_version!r}"
+                  )
+          PY
+
       - name: Install Python dependencies
         run: >-
           python3 -m pip install
@@ -103,6 +151,7 @@ jobs:
           tests/test_enrollment_bundle.py
           tests/test_fleet_card.py
           tests/test_frontend_registration.py
+          tests/test_go_supply_chain.py
           tests/test_install_config.py
           tests/test_legacy_adapter.py
           tests/test_node_contract.py
