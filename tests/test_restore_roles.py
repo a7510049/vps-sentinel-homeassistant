@@ -62,7 +62,7 @@ class RestoreRoleMatrixTests(unittest.TestCase):
         config_block = CREATE.split(
             'if [[ -d "${HA_DIR}/config" ]]; then',
             1,
-        )[1].split("fi", 1)[0]
+        )[1].split("\n  fi", 1)[0]
         self.assertIn('"${staging}/homeassistant/config"', config_block)
 
     def test_empty_archive_cannot_report_success(self):
