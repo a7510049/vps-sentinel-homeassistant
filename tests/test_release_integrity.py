@@ -79,7 +79,8 @@ class StabilityPreparationTests(unittest.TestCase):
     def test_release_notes_use_the_matching_changelog_section(self):
         self.assertIn('index($0, "## " version " — ") == 1', RELEASE)
         self.assertIn('--notes-file "${notes_file}"', RELEASE)
-        self.assertIn('release_title="VPS Sentinel v${VERSION} — ', RELEASE)
+        self.assertIn('release_title="VPS Sentinel v${VERSION}"', RELEASE)
+        self.assertIn("printf '## %s\\n\\n'", RELEASE)
         self.assertNotIn("--generate-notes", RELEASE)
 
     def test_changelog_version_headings_share_one_format(self):
@@ -88,6 +89,26 @@ class StabilityPreparationTests(unittest.TestCase):
         ]
         self.assertTrue(headings)
         self.assertTrue(all(" — " in heading for heading in headings))
+
+    def test_changelog_uses_only_standard_release_categories(self):
+        allowed = {
+            "新增功能",
+            "改善",
+            "修正",
+            "安全性",
+            "可靠性",
+            "相容性",
+            "開發品質",
+        }
+        versions = CHANGELOG.split("\\n## ")[1:]
+        self.assertTrue(versions)
+        for version in versions:
+            categories = [
+                line[4:] for line in version.splitlines()
+                if line.startswith("### ")
+            ]
+            self.assertEqual(len(categories), len(set(categories)))
+            self.assertTrue(set(categories) <= allowed)
 
 
 if __name__ == "__main__":
