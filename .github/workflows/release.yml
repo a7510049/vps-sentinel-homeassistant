@@ -43,7 +43,7 @@ jobs:
           card_version="$(sed -n 's/^const CARD_VERSION = "\([^"]*\)";.*/\1/p' \
             home-assistant/www/vps-sentinel-apple-card.js | head -n 1)"
           [[ "${card_version}" == "${version}" ]]
-          grep -q "^## ${version}" CHANGELOG.md
+          grep -Fq "## ${version} — " CHANGELOG.md
           grep -q 'VERSION_FILE="/opt/vps-monitor/.version"' \
             scripts/apple-dashboard.sh
 
@@ -90,7 +90,32 @@ jobs:
             echo "${TAG} 已存在，略過重複發布。"
             exit 0
           fi
+          release_heading="$(awk -v version="${VERSION}" '
+            index($0, "## " version " — ") == 1 { print; exit }
+          ' CHANGELOG.md)"
+          if [[ -z "${release_heading}" ]]; then
+            echo "CHANGELOG.md 找不到 ${VERSION} 的版本標題。" >&2
+            exit 1
+          fi
+
+          release_title="VPS Sentinel v${VERSION} — ${release_heading#* — }"
+          notes_file="$(mktemp)"
+          trap 'rm -f -- "${notes_file}"' EXIT
+          awk -v version="${VERSION}" '
+            index($0, "## " version " — ") == 1 {
+              capture = 1
+              next
+            }
+            capture && /^## / { exit }
+            capture { print }
+          ' CHANGELOG.md > "${notes_file}"
+
+          if ! grep -q '[^[:space:]]' "${notes_file}"; then
+            echo "CHANGELOG.md 的 ${VERSION} 版本說明為空。" >&2
+            exit 1
+          fi
+
           gh release create "${TAG}" \
             --target "${GITHUB_SHA}" \
-            --title "VPS Sentinel ${TAG}" \
-            --generate-notes
+            --title "${release_title}" \
+            --notes-file "${notes_file}"
