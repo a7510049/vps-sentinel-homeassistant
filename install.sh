@@ -154,6 +154,6 @@ echo
 echo "Home Assistant 仍需完成："
 echo "  1. 首次建立管理員"
 echo "  2. 加入 MQTT 整合"
-echo "  3. 註冊 /local/vps-sentinel-fleet-card.js?v=1.0.0-alpha.1"
+echo "  3. Fleet Card 已由標準 frontend 設定自動載入；客製 !include 結構才需依提示手動加入"
 echo
 echo "排錯：sudo journalctl -u vps-sentinel-controller -n 50 --no-pager"
