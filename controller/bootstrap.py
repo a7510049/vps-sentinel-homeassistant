@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Compose Controller component installation with the recoverable Broker transaction."""
+"""Compose Controller, Broker ACL and local Agent migration transactions."""
 
 import argparse
 import os
 from pathlib import Path
 import secrets
 import shlex
+import shutil
+import stat
 import subprocess
 import sys
+import tempfile
 
 CONTROLLER_DIR = Path(__file__).resolve().parent
 REPO_ROOT = CONTROLLER_DIR.parent
@@ -15,7 +18,12 @@ sys.path.insert(0, str(CONTROLLER_DIR))
 sys.path.insert(0, str(REPO_ROOT / "vps-monitor"))
 
 from broker_policy import BrokerFilesTransaction, BrokerPolicy, BrokerPolicyError
-from enrollment import EnrollmentStore
+from enrollment import EnrollmentError, EnrollmentStore
+
+
+CONTROLLER_ENV = Path("/etc/vps-sentinel-controller.env")
+MONITOR_ENV = Path("/etc/vps-monitor.env")
+STORE_PATH = Path("/var/lib/vps-sentinel-controller/enrollments.json")
 
 
 def read_environment(path):
@@ -36,6 +44,70 @@ def read_environment(path):
     return values
 
 
+def _quote(value):
+    value = str(value)
+    if "\n" in value or "\r" in value:
+        raise ValueError("environment value contains a newline")
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _snapshot(path):
+    path = Path(path)
+    if not path.exists():
+        return None
+    metadata = path.stat()
+    return (
+        path.read_bytes(),
+        stat.S_IMODE(metadata.st_mode),
+        metadata.st_uid,
+        metadata.st_gid,
+    )
+
+
+def _atomic_write(path, content, mode):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(content)
+            output.flush()
+            os.fsync(output.fileno())
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+        os.chmod(path, mode)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def _restore(path, snapshot):
+    path = Path(path)
+    if snapshot is None:
+        path.unlink(missing_ok=True)
+        return
+    content, mode, uid, gid = snapshot
+    _atomic_write(path, content, mode)
+    os.chown(path, uid, gid)
+
+
+def write_environment(path, values):
+    lines = ["# Updated by VPS Sentinel Controller bootstrap."]
+    lines.extend(
+        f"{key}={_quote(value)}"
+        for key, value in sorted(values.items())
+    )
+    _atomic_write(
+        path,
+        ("\n".join(lines) + "\n").encode("utf-8"),
+        0o600,
+    )
+
+
 def run(command, *, environment=None, timeout=1800):
     return subprocess.run(
         command,
@@ -43,6 +115,34 @@ def run(command, *, environment=None, timeout=1800):
         timeout=timeout,
         check=False,
     )
+
+
+def _secure_store_owner():
+    if STORE_PATH.exists():
+        os.chmod(STORE_PATH, 0o600)
+        shutil.chown(
+            STORE_PATH,
+            user="vps-sentinel-controller",
+            group="vps-sentinel-controller",
+        )
+
+
+def _bindings(*pairs):
+    result = {}
+    for username, node_id in pairs:
+        if username and node_id:
+            nodes = result.setdefault(username, [])
+            if node_id not in nodes:
+                nodes.append(node_id)
+    return result
+
+
+def _policy(store, controller_username, bindings):
+    return BrokerPolicy(
+        store,
+        controller_username=controller_username,
+        legacy_bindings=bindings,
+    ).render_acl()
 
 
 def main():
@@ -61,8 +161,7 @@ def main():
     if not component.is_file():
         raise SystemExit("找不到 Controller 元件安裝器")
 
-    controller_env_path = Path("/etc/vps-sentinel-controller.env")
-    existing = read_environment(controller_env_path)
+    existing = read_environment(CONTROLLER_ENV)
     controller_password = existing.get("MQTT_PASSWORD") or secrets.token_urlsafe(32)
     controller_username = existing.get("MQTT_USERNAME") or "vps-controller"
 
@@ -87,46 +186,138 @@ def main():
     if installed.returncode != 0:
         raise SystemExit("Controller 元件部署失敗，尚未修改 Broker 權限")
 
-    enrollments = EnrollmentStore(
-        "/var/lib/vps-sentinel-controller/enrollments.json"
-    )
-    monitor = read_environment("/etc/vps-monitor.env")
-    legacy_bindings = {}
-    if monitor.get("VPS_ID") and monitor.get("MQTT_USERNAME"):
-        legacy_bindings[monitor["MQTT_USERNAME"]] = [monitor["VPS_ID"]]
-    policy = BrokerPolicy(
-        enrollments,
-        controller_username=controller_username,
-        legacy_bindings=legacy_bindings,
-    )
+    store_snapshot = _snapshot(STORE_PATH)
+    monitor_snapshot = _snapshot(MONITOR_ENV)
+    store = EnrollmentStore(STORE_PATH)
+    monitor = read_environment(MONITOR_ENV)
+    node_id = monitor.get("VPS_ID")
+    old_username = monitor.get("MQTT_USERNAME")
+    local_enrollment = None
+    expected_username = None
+
+    try:
+        if node_id:
+            expected_username = store.credential_for(node_id)
+            if expected_username is None:
+                local_enrollment = store.register(
+                    node_id,
+                    monitor.get("VPS_NAME") or node_id,
+                )
+                expected_username = local_enrollment.username
+            elif old_username != expected_username:
+                local_enrollment = store.rotate(node_id)
+        _secure_store_owner()
+    except (EnrollmentError, OSError) as error:
+        _restore(STORE_PATH, store_snapshot)
+        raise SystemExit(str(error)) from error
 
     def restart_services():
-        mosquitto = run(
+        if run(
             ["systemctl", "restart", "mosquitto"],
             timeout=60,
-        )
-        if mosquitto.returncode != 0:
+        ).returncode != 0:
             return False
-        controller = run(
+        if run(
             ["systemctl", "restart", "vps-sentinel-controller"],
             timeout=60,
-        )
-        if controller.returncode != 0:
+        ).returncode != 0:
             return False
-        active = run(
+        if run(
             ["systemctl", "is-active", "--quiet", "vps-sentinel-controller"],
             timeout=30,
-        )
-        return active.returncode == 0
+        ).returncode != 0:
+            return False
+        if MONITOR_ENV.exists():
+            if run(
+                ["systemctl", "restart", "vps-monitor"],
+                timeout=60,
+            ).returncode != 0:
+                return False
+            if run(
+                ["systemctl", "is-active", "--quiet", "vps-monitor"],
+                timeout=30,
+            ).returncode != 0:
+                return False
+        return True
 
     transaction = BrokerFilesTransaction(restarter=restart_services)
+    transition_bindings = _bindings(
+        (old_username, node_id),
+        (expected_username, node_id),
+    )
+    credentials = {controller_username: controller_password}
+    if local_enrollment is not None:
+        credentials[local_enrollment.username] = local_enrollment.password
+
     try:
         transaction.apply(
-            credentials={controller_username: controller_password},
-            acl_text=policy.render_acl(),
+            credentials=credentials,
+            acl_text=_policy(
+                store,
+                controller_username,
+                transition_bindings,
+            ),
         )
     except BrokerPolicyError as error:
+        _restore(STORE_PATH, store_snapshot)
+        _secure_store_owner()
+        run(["systemctl", "restart", "vps-sentinel-controller"], timeout=60)
         raise SystemExit(str(error)) from error
+
+    if local_enrollment is not None:
+        migrated = dict(monitor)
+        migrated.update({
+            "MQTT_USERNAME": local_enrollment.username,
+            "MQTT_PASSWORD": local_enrollment.password,
+            "PUBLISH_V1_CONTRACT": "true",
+        })
+        try:
+            write_environment(MONITOR_ENV, migrated)
+            if not restart_services():
+                raise RuntimeError("本機 Agent 無法使用 node credential 啟動")
+        except Exception as error:
+            _restore(MONITOR_ENV, monitor_snapshot)
+            _restore(STORE_PATH, store_snapshot)
+            _secure_store_owner()
+            rollback_store = EnrollmentStore(STORE_PATH)
+            rollback_bindings = _bindings((old_username, node_id))
+            try:
+                transaction.apply(
+                    credentials={controller_username: controller_password},
+                    remove_usernames=[local_enrollment.username],
+                    acl_text=_policy(
+                        rollback_store,
+                        controller_username,
+                        rollback_bindings,
+                    ),
+                )
+            finally:
+                restart_services()
+            raise SystemExit(str(error)) from error
+        old_username = local_enrollment.username
+
+    if node_id and expected_username:
+        final_bindings = _bindings((expected_username, node_id))
+        obsolete = (
+            ["vps-monitor"]
+            if expected_username != "vps-monitor"
+            else []
+        )
+        try:
+            transaction.apply(
+                credentials={controller_username: controller_password},
+                remove_usernames=obsolete,
+                acl_text=_policy(
+                    store,
+                    controller_username,
+                    final_bindings,
+                ),
+            )
+        except BrokerPolicyError as error:
+            raise SystemExit(
+                "Agent 已切換成功，但舊 vps-monitor credential "
+                f"撤銷失敗，可安全重跑安裝器：{error}"
+            ) from error
 
     card_source = (
         repo_root
@@ -145,7 +336,9 @@ def main():
         os.replace(temporary, card_target)
 
     print("Controller、Mosquitto ACL 與 Fleet Card 已完成部署。")
-    print("下一步只需在 Home Assistant 註冊 Fleet Card 資源並加入 Agent。")
+    if node_id:
+        print(f"本機 Agent {node_id} 已使用專用 credential 發布 v1 fleet 資料。")
+    print("下一步只需在 Home Assistant 註冊 Fleet Card 資源並加入其他 Agent。")
 
 
 if __name__ == "__main__":

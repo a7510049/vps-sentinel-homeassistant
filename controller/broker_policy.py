@@ -215,6 +215,15 @@ class BrokerFilesTransaction:
             )
         for username in sorted(remove_usernames):
             _username(username, "removed username")
+            existing_user = any(
+                line.startswith(f"{username}:")
+                for line in target.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                ).splitlines()
+            )
+            if not existing_user:
+                continue
             result = self.runner([
                 "mosquitto_passwd",
                 "-D",

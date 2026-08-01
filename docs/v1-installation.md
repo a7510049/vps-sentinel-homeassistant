@@ -42,11 +42,12 @@ bash install.sh --role controller --dry-run
 2. Controller 元件以停止狀態安裝。
 3. 建立或沿用 Controller 專用 MQTT 密碼。
 4. 從 Enrollment Store 與 legacy VPS_ID 產生完整 ACL。
-5. Broker transaction 套用 password、ACL、config。
-6. 同一個 restart callback 驗證 Mosquitto 與 Controller。
-7. 失敗時 Broker 三個檔案回復。
-8. Fleet Card 以暫存檔與 `os.replace` 部署。
-9. 單一入口輸出唯一完成摘要與仍需人工處理的 Home Assistant 步驟。
+5. Broker transaction 先套用 Controller 與本機 Agent 的過渡期 password、ACL、config。
+6. combined 角色原子更新本機 Agent 環境檔，切換為專用 `vps-node-{id}` credential，並啟用 v1 contract。
+7. 驗證 Mosquitto、Controller 與本機 Agent 後，以第二次 Broker transaction 撤銷共用 `vps-monitor` credential。
+8. 任一切換步驟失敗時，Enrollment Store、Agent 環境檔及 Broker policy 一起補償回復。
+9. Fleet Card 以暫存檔與 `os.replace` 部署。
+10. 單一入口輸出唯一完成摘要與仍需人工處理的 Home Assistant 步驟。
 
 Controller 密碼只保存於 root-only 的環境檔，不顯示在完成摘要或日誌。
 
@@ -55,6 +56,7 @@ Controller 密碼只保存於 root-only 的環境檔，不顯示在完成摘要�
 - setup 沿用既有 Home Assistant、MQTT password 與 Agent 設定。
 - Controller 元件安裝器沿用既有環境檔，不覆寫密碼。
 - Broker transaction 從目前 password file 建立 staging 副本，再更新 Controller 帳號。
+- combined 本機 Agent 若已使用正確 node credential，重跑不會輪替密碼；已不存在的 legacy 帳號也可安全再次撤銷。
 - requirements hash 未變時不重建 venv。
 - Fleet Card 使用原子取代。
 
@@ -89,6 +91,5 @@ Enrollment Store、password file 與 ACL 由同一流程更新。Broker 交易�
 ## 尚待完成
 
 - 非互動 combined／controller JSON 設定與完整 preflight report。
-- combined 本機 Agent 從 legacy 帳號自動遷移到專用 node credential。
 - Fleet Card Home Assistant resource 自動註冊。
 - Controller／Agent／combined 的升級、備份、復原與移除端到端測試。
