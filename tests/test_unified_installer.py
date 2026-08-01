@@ -67,6 +67,15 @@ class UnifiedInstallerTests(unittest.TestCase):
         self.assertIn("os.replace(temporary, card_target)", BOOTSTRAP)
         self.assertIn("os.chmod(temporary, 0o644)", BOOTSTRAP)
 
+    def test_deployment_config_enables_preflight_and_resume_state(self):
+        self.assertIn("controller/install_config.py", ENTRYPOINT)
+        self.assertIn("--preflight", ENTRYPOINT)
+        self.assertIn("STATE_FILE", ENTRYPOINT)
+        self.assertIn("record_state", ENTRYPOINT)
+        self.assertIn("將以冪等流程續跑", ENTRYPOINT)
+        self.assertIn("VPS_SENTINEL_NONINTERACTIVE", SETUP)
+        self.assertIn("CONFIG_NODE_PROFILE", SETUP)
+
     def test_agent_config_infers_role_and_uses_secure_consumer(self):
         self.assertIn('--config 缺少檔案', ENTRYPOINT)
         self.assertIn(
@@ -77,10 +86,8 @@ class UnifiedInstallerTests(unittest.TestCase):
             'controller/apply_agent_config.py',
             ENTRYPOINT,
         )
-        self.assertIn(
-            '--config 目前只適用於 agent 角色',
-            ENTRYPOINT,
-        )
+        self.assertIn("config_kind", ENTRYPOINT)
+        self.assertIn("config_role", ENTRYPOINT)
 
     def test_noninteractive_agent_mode_is_only_an_internal_flag(self):
         agent_installer = (
