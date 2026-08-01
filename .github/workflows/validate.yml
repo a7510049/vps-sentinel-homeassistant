@@ -66,6 +66,42 @@ jobs:
             python3 tests/validate_go_agent_output.py
           sha256sum go-agent-amd64 go-agent-arm64
 
+      - name: Scan Go source and binaries for known vulnerabilities
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          cd go-agent
+          govulncheck ./...
+          cd ..
+          govulncheck -mode binary go-agent-amd64
+          govulncheck -mode binary go-agent-arm64
+
+      - name: Generate amd64 SPDX SBOM
+        uses: anchore/sbom-action@4a30bbadbe35d73a1729ee95a9196544192d905e
+        with:
+          file: go-agent-amd64
+          format: spdx-json
+          output-file: go-agent-amd64.spdx.json
+          artifact-name: go-agent-amd64-sbom
+          syft-version: v1.44.0
+          upload-release-assets: false
+
+      - name: Generate arm64 SPDX SBOM
+        uses: anchore/sbom-action@4a30bbadbe35d73a1729ee95a9196544192d905e
+        with:
+          file: go-agent-arm64
+          format: spdx-json
+          output-file: go-agent-arm64.spdx.json
+          artifact-name: go-agent-arm64-sbom
+          syft-version: v1.44.0
+          upload-release-assets: false
+
+      - name: Validate Go SBOM documents
+        run: |
+          python3 -m json.tool go-agent-amd64.spdx.json >/dev/null
+          python3 -m json.tool go-agent-arm64.spdx.json >/dev/null
+          grep -Fq '"spdxVersion": "SPDX-2.3"' go-agent-amd64.spdx.json
+          grep -Fq '"spdxVersion": "SPDX-2.3"' go-agent-arm64.spdx.json
+
       - name: Install Python dependencies
         run: >-
           python3 -m pip install
