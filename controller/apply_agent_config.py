@@ -150,7 +150,7 @@ def main():
         )
         if installed.returncode != 0:
             raise BundleError("Agent 安裝或端到端驗證失敗")
-    except Exception:
+    except Exception as error:
         for path, snapshot in snapshots.items():
             _restore(path, snapshot)
         if service_existed:
@@ -159,7 +159,7 @@ def main():
                 timeout=60,
                 check=False,
             )
-        raise
+        raise SystemExit(str(error)) from error
 
     bundle_path.unlink()
     print("Agent 已加入 Controller；一次性 enrollment bundle 已安全刪除。")
