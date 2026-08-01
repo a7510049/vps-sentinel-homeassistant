@@ -112,6 +112,7 @@ jobs:
           tests/test_combined_migration.py
           tests/mqtt_integration.py
           tests/test_release_integrity.py
+          tests/test_restore_roles.py
           tests/validate_go_agent_output.py
           benchmarks/agent_benchmark.py
 

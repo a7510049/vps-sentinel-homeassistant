@@ -132,25 +132,41 @@ apply_staging() {
 }
 
 start_and_validate() {
-  local compose
+  local compose has_component=false
   systemctl daemon-reload
-  systemctl restart mosquitto
+
   compose="$(compose_path)"
-  [[ -n "${compose}" ]] || return 1
-  (cd "${HA_DIR}" && docker compose up -d homeassistant)
-  systemctl is-active --quiet mosquitto || return 1
+  if [[ -n "${compose}" ]]; then
+    has_component=true
+    (cd "${HA_DIR}" && docker compose up -d homeassistant)
+  fi
+
+  if [[ -f "${MQTT_CONF}" || -f "${MQTT_PASSWD}" ||
+        -f "${MQTT_ACL}" ]]; then
+    has_component=true
+    systemctl restart mosquitto
+    systemctl is-active --quiet mosquitto || return 1
+  fi
+
   if [[ -f "${CONTROLLER_ENV}" ]]; then
+    has_component=true
     systemctl restart vps-sentinel-controller
     systemctl is-active --quiet vps-sentinel-controller || return 1
   fi
+
   if [[ -f "${ENV_FILE}" ]]; then
+    has_component=true
     systemctl restart vps-monitor
     systemctl is-active --quiet vps-monitor || return 1
     mqtt_probe || return 1
   fi
-  wait_for_home_assistant || return 1
-  docker exec homeassistant python -m homeassistant \
-    --script check_config --config /config >/dev/null 2>&1
+
+  [[ "${has_component}" == "true" ]] || return 1
+  if [[ -n "${compose}" ]]; then
+    wait_for_home_assistant || return 1
+    docker exec homeassistant python -m homeassistant \
+      --script check_config --config /config >/dev/null 2>&1
+  fi
 }
 
 list_backups() {
