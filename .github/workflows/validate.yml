@@ -61,6 +61,7 @@ jobs:
           controller/enroll_cli.py
           controller/enrollment.py
           controller/enrollment_bundle.py
+          controller/install_config.py
           controller/node_registry.py
           controller/register_frontend.py
           vps-monitor/vps_monitor.py
@@ -75,6 +76,7 @@ jobs:
           tests/test_enrollment_bundle.py
           tests/test_fleet_card.py
           tests/test_frontend_registration.py
+          tests/test_install_config.py
           tests/test_legacy_adapter.py
           tests/test_node_contract.py
           tests/test_node_registry.py

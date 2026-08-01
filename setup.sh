@@ -11,6 +11,10 @@ readonly MONITOR_ENV="/etc/vps-monitor.env"
 readonly CREDENTIALS_FILE="/root/vps-homeassistant-credentials.txt"
 readonly SKIP_AGENT="${VPS_SENTINEL_SKIP_AGENT:-false}"
 readonly DEFER_SUMMARY="${VPS_SENTINEL_DEFER_SUMMARY:-false}"
+readonly NONINTERACTIVE="${VPS_SENTINEL_NONINTERACTIVE:-false}"
+readonly CONFIG_NODE_ID="${VPS_SENTINEL_NODE_ID:-}"
+readonly CONFIG_NODE_NAME="${VPS_SENTINEL_NODE_NAME:-}"
+readonly CONFIG_NODE_PROFILE="${VPS_SENTINEL_NODE_PROFILE:-}"
 
 blue()   { printf '\n\033[1;36m%s\033[0m\n' "$*"; }
 green()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
@@ -28,8 +32,8 @@ if [[ ${EUID} -ne 0 ]]; then
   exit 1
 fi
 
-if [[ ! -t 0 ]]; then
-  red "這是互動式中文安裝器，請直接在終端機執行。"
+if [[ ! -t 0 && "${NONINTERACTIVE}" != "true" ]]; then
+  red "非互動安裝請從 install.sh 使用 --config。"
   exit 1
 fi
 
@@ -62,6 +66,12 @@ fi
 ask_yes_no() {
   local result_var="$1" question="$2" default_answer="$3" answer hint
   [[ "${default_answer}" == "yes" ]] && hint="Y/n" || hint="y/N"
+  if [[ "${NONINTERACTIVE}" == "true" ]]; then
+    [[ "${default_answer}" == "yes" ]] &&
+      printf -v "${result_var}" 'true' ||
+      printf -v "${result_var}" 'false'
+    return
+  fi
   while true; do
     read -r -p "${question} [${hint}]：" answer
     answer="${answer:-${default_answer}}"
@@ -75,6 +85,14 @@ ask_yes_no() {
 
 ask() {
   local result_var="$1" question="$2" default_value="${3-}" answer
+  if [[ "${NONINTERACTIVE}" == "true" ]]; then
+    [[ -n "${default_value}" ]] || {
+      red "非互動設定缺少：${question}"
+      return 1
+    }
+    printf -v "${result_var}" '%s' "${default_value}"
+    return
+  fi
   if [[ -n "${default_value}" ]]; then
     read -r -p "${question} [${default_value}]：" answer
     answer="${answer:-${default_value}}"
@@ -365,6 +383,10 @@ if [[ -z "${tailscale_ip}" ]]; then
   echo "接下來終端機會顯示 Tailscale 登入網址。"
   echo "請用瀏覽器開啟網址，登入並授權這台 VPS。"
   echo
+  if [[ "${NONINTERACTIVE}" == "true" ]]; then
+    red "非互動安裝前必須先完成 Tailscale 登入；preflight 已標示此需求。"
+    exit 1
+  fi
   tailscale up
   tailscale_ip="$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
 fi
@@ -600,8 +622,10 @@ else
     sed 's/[^a-z0-9_-]/-/g')"
   vps_name=""
   vps_id=""
-  ask vps_name "Home Assistant 中的 VPS 名稱" "$(hostname -s)"
-  ask vps_id "VPS 識別 ID（小寫英文、數字、_、-）" "${default_id}"
+  ask vps_name "Home Assistant 中的 VPS 名稱" \
+    "${CONFIG_NODE_NAME:-$(hostname -s)}"
+  ask vps_id "VPS 識別 ID（小寫英文、數字、_、-）" \
+    "${CONFIG_NODE_ID:-${default_id}}"
   if [[ ! "${vps_id}" =~ ^[a-z0-9_-]+$ ]]; then
     red "VPS 識別 ID 格式不正確。"
     exit 1
@@ -612,7 +636,13 @@ else
   echo "  2) 平衡模式：每 15 秒更新資源（推薦）"
   echo "  3) 即時監控：每 10 秒更新資源"
   profile=""
-  ask profile "請選擇" "2"
+  case "${CONFIG_NODE_PROFILE}" in
+    efficient) profile=1 ;;
+    balanced|"") profile=2 ;;
+    realtime) profile=3 ;;
+    *) red "不支援的 node profile：${CONFIG_NODE_PROFILE}"; exit 1 ;;
+  esac
+  ask profile "請選擇" "${profile}"
   case "${profile}" in
     1) interval=60; health=900; updates=86400; samples=5 ;;
     2) interval=15; health=300; updates=86400; samples=20 ;;
