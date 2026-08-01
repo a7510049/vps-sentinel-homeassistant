@@ -162,13 +162,25 @@ def run_benchmark(args):
     summary_path = Path(args.summary) if args.summary else output.with_suffix(
         output.suffix + ".summary.json"
     )
+    log_path = Path(args.log) if args.log else output.with_suffix(
+        output.suffix + ".log"
+    )
+    log_path.parent.mkdir(parents=True, exist_ok=True)
 
     started_at = utc_timestamp()
-    process = subprocess.Popen(
-        command,
-        env=environment,
-        start_new_session=True,
-    )
+    log_stream = log_path.open("w", encoding="utf-8")
+    os.chmod(log_path, 0o600)
+    try:
+        process = subprocess.Popen(
+            command,
+            env=environment,
+            start_new_session=True,
+            stdout=log_stream,
+            stderr=subprocess.STDOUT,
+        )
+    except Exception:
+        log_stream.close()
+        raise
     status = "warming_up"
     terminated_by_harness = False
     rows = 0
@@ -249,6 +261,7 @@ def run_benchmark(args):
             os.chmod(output, 0o600)
     finally:
         terminated_by_harness = terminate(process)
+        log_stream.close()
 
     summary = {
         "schema_version": 1,
@@ -269,6 +282,8 @@ def run_benchmark(args):
         "terminated_by_harness": terminated_by_harness,
         "raw_csv": str(output),
         "raw_csv_sha256": sha256(output),
+        "raw_log": str(log_path),
+        "raw_log_sha256": sha256(log_path),
         "environment_file_used": bool(args.env_file),
         "host": {
             "fingerprint": host_fingerprint(),
@@ -304,6 +319,7 @@ def parse_args(argv=None):
     parser.add_argument("--skip-service-check", action="store_true")
     parser.add_argument("--output", required=True)
     parser.add_argument("--summary")
+    parser.add_argument("--log")
     return parser.parse_args(argv)
 
 
