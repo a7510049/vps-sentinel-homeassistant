@@ -14,6 +14,10 @@ SPEC = importlib.util.spec_from_file_location(
 )
 beta_evidence = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(beta_evidence)
+SETUP = (ROOT / "setup.sh").read_text(encoding="utf-8")
+AGENT_INSTALL = (ROOT / "vps-monitor" / "install.sh").read_text(encoding="utf-8")
+UPGRADE = (ROOT / "scripts" / "upgrade.sh").read_text(encoding="utf-8")
+UNINSTALL = (ROOT / "scripts" / "uninstall.sh").read_text(encoding="utf-8")
 
 
 class BetaEvidenceTests(unittest.TestCase):
@@ -111,6 +115,16 @@ class BetaEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(report["summary"]["result"], "FAIL")
         self.assertEqual(report["summary"]["failed"], 1)
+
+    def test_collector_follows_install_upgrade_and_uninstall_lifecycle(self):
+        command = "vps-sentinel-beta-evidence"
+        self.assertIn("scripts/beta-evidence.py", SETUP)
+        self.assertIn(command, SETUP)
+        self.assertIn("../scripts/beta-evidence.py", AGENT_INSTALL)
+        self.assertIn(command, AGENT_INSTALL)
+        self.assertIn("scripts/beta-evidence.py", UPGRADE)
+        self.assertIn(command, UPGRADE)
+        self.assertIn(command, UNINSTALL)
 
     def test_writes_atomic_private_report_and_matching_checksum(self):
         temporary, root = self.make_root("agent")
