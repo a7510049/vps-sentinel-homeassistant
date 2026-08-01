@@ -31,6 +31,8 @@ def verify_artifact(payload, path_key, digest_key, source):
     if not isinstance(artifact, str) or not isinstance(expected, str):
         raise ValueError(f"{source} has no {path_key} integrity data")
     target = Path(artifact)
+    if not target.is_absolute():
+        target = Path(source).parent / target
     if not target.is_file() or sha256(target) != expected:
         raise ValueError(f"{source} has a missing or changed {path_key}")
 
@@ -126,6 +128,20 @@ def compare(python_paths, go_paths):
     architectures = {
         item["host"].get("architecture") for item in [*python_runs, *go_runs]
     }
+    versions = {item.get("version") for item in [*python_runs, *go_runs]}
+    build_refs = {
+        item.get("build_ref") for item in [*python_runs, *go_runs]
+    }
+    if (
+        len(versions) != 1
+        or not all(isinstance(item, str) and item for item in versions)
+    ):
+        raise ValueError("all runs must use the same non-empty version")
+    if (
+        len(build_refs) != 1
+        or not all(isinstance(item, str) and item for item in build_refs)
+    ):
+        raise ValueError("all runs must use the same non-empty build ref")
     if len(fingerprints) != 1:
         raise ValueError("all runs must come from the same host")
     if len(architectures) != 1:
@@ -150,6 +166,8 @@ def compare(python_paths, go_paths):
     return {
         "schema_version": 1,
         "generated_at": utc_timestamp(),
+        "version": next(iter(versions)),
+        "build_ref": next(iter(build_refs)),
         "gate": {
             "minimum_runs_each": MINIMUM_RUNS,
             "minimum_duration_seconds": MINIMUM_DURATION,
