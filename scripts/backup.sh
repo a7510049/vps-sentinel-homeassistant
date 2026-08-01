@@ -259,7 +259,7 @@ restore_backup() {
   staging="$(mktemp -d)"
   tar -xzf "${archive}" -C "${staging}"
   if [[ ! -f "${staging}/MANIFEST" ]] ||
-     ! grep -Eq '^format=(1|2|3) "${staging}/MANIFEST"; then
+     ! grep -Eq '^format=(1|2|3)$' "${staging}/MANIFEST"; then
     rm -rf -- "${staging}"
     red "無法辨識此備份格式，已取消還原。"
     return 1
@@ -279,89 +279,6 @@ restore_backup() {
 
   systemctl stop vps-monitor 2>/dev/null || true
   systemctl stop vps-sentinel-controller 2>/dev/null || true
-  docker stop homeassistant >/dev/null 2>&1 || true
-  systemctl stop mosquitto 2>/dev/null || true
-  apply_staging "${staging}"
-  if ! start_and_validate; then
-    recovery="$(mktemp -d)"
-    tar -xzf "${safety}" -C "${recovery}"
-    apply_staging "${recovery}"
-    start_and_validate || true
-    rm -rf -- "${recovery}" "${staging}"
-    red "還原後驗證未通過，已自動回復還原前的設定。"
-    echo "安全備份保留於：${safety}"
-    return 1
-  fi
-  rm -rf -- "${staging}"
-  green "設定已還原，Home Assistant、MQTT 與監控資料均通過驗證"
-}
-
-remove_old_backups() {
-  local keep
-  read -r -p "要保留最近幾份手動備份 [3]：" keep
-  keep="${keep:-3}"
-  [[ "${keep}" =~ ^[1-9][0-9]*$ ]] || {
-    red "請輸入大於 0 的整數。"
-    return
-  }
-  mapfile -t old_backups < <(
-    find "${BACKUP_ROOT}" -maxdepth 1 -type f -name '*.tar.gz' \
-      -printf '%T@ %p\n' | sort -rn | tail -n "+$((keep + 1))" |
-      cut -d' ' -f2-
-  )
-  for old_backup in "${old_backups[@]}"; do
-    case "${old_backup}" in
-      "${BACKUP_ROOT}/"*.tar.gz) rm -f -- "${old_backup}" ;;
-    esac
-  done
-  green "清理完成，已保留最近 ${keep} 份手動備份"
-}
-
-while true; do
-  clear
-  printf '\033[1;35m'
-  cat <<'BANNER'
-╭────────────────────────────────────────╮
-│  💾 VPS Sentinel 備份與還原            │
-╰────────────────────────────────────────╯
-BANNER
-  printf '\033[0m'
-  echo "  1. 查看現有備份"
-  echo "  2. 建立設定備份"
-  echo "  3. 還原設定備份"
-  echo "  4. 清理舊備份"
-  echo "  0. 返回上一層"
-  read -r -p "請選擇 [0]：" choice
-  case "${choice:-0}" in
-    1) list_backups ;;
-    2) create_backup ;;
-    3) restore_backup ;;
-    4) remove_old_backups ;;
-    0) exit 0 ;;
-    *) yellow "請輸入 0 到 4。" ;;
-  esac
-  echo
-  read -r -p "按 Enter 返回備份管理……" _
-done
- "${staging}/MANIFEST"; then
-    rm -rf -- "${staging}"
-    red "無法辨識此備份格式，已取消還原。"
-    return 1
-  fi
-
-  yellow "還原會覆蓋目前的 Home Assistant、MQTT 與監控設定。"
-  echo "系統會先建立一份目前狀態的安全備份。"
-  read -r -p "若要繼續，請輸入：還原設定 > " confirmation
-  if [[ "${confirmation}" != "還原設定" ]]; then
-    rm -rf -- "${staging}"
-    echo "已取消，沒有變更任何資料。"
-    return
-  fi
-  create_backup
-  safety="$(find "${BACKUP_ROOT}" -maxdepth 1 -type f -name '*.tar.gz' \
-    -printf '%T@ %p\n' | sort -rn | head -n 1 | cut -d' ' -f2-)"
-
-  systemctl stop vps-monitor 2>/dev/null || true
   docker stop homeassistant >/dev/null 2>&1 || true
   systemctl stop mosquitto 2>/dev/null || true
   apply_staging "${staging}"
