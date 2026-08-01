@@ -30,7 +30,7 @@
 每台測試 VPS 安裝完成後執行：
 
 ```bash
-sudo vps-sentinel-beta-evidence \
+sudo vps-sentinel evidence \
   --expect-role agent \
   --provider "供應商名稱" \
   --region "區域代號"
