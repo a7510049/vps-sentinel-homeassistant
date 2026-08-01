@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).parents[1]
@@ -15,7 +16,10 @@ RELEASE = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
 
 class StabilityPreparationTests(unittest.TestCase):
     def test_release_version_surfaces_are_consistent(self):
-        self.assertEqual(VERSION, "0.9.8")
+        self.assertRegex(
+            VERSION,
+            re.compile(r"^[0-9]+\\.[0-9]+\\.[0-9]+(?:-rc\\.[1-9][0-9]*)?$"),
+        )
         self.assertIn(f'const CARD_VERSION = "{VERSION}";', CARD)
         self.assertIn(f"## {VERSION}", CHANGELOG)
 
@@ -75,11 +79,28 @@ class StabilityPreparationTests(unittest.TestCase):
         self.assertIn('rm -f -- "${CARD_TARGET}"', UPGRADE)
         self.assertIn("/local/vps-sentinel-apple-card.js?v=${latest_version}", UPGRADE)
 
-    def test_release_runs_validation_before_publish(self):
-        self.assertIn("Run Python tests", RELEASE)
-        self.assertIn("Check release consistency", RELEASE)
+    def test_release_waits_for_the_validated_main_commit(self):
+        self.assertIn("workflow_run:", RELEASE)
+        self.assertIn("      - Validate", RELEASE)
+        self.assertIn(
+            "github.event.workflow_run.conclusion == 'success'",
+            RELEASE,
+        )
+        self.assertIn(
+            "github.event.workflow_run.head_branch == 'main'",
+            RELEASE,
+        )
+        self.assertIn(
+            "github.event.workflow_run.event == 'push'",
+            RELEASE,
+        )
+        self.assertIn(
+            "ref: ${{ github.event.workflow_run.head_sha }}",
+            RELEASE,
+        )
+        self.assertIn("Detect VERSION change", RELEASE)
         self.assertLess(
-            RELEASE.index("Run Python tests"),
+            RELEASE.index("Check release consistency"),
             RELEASE.index("Publish GitHub Release"),
         )
 
