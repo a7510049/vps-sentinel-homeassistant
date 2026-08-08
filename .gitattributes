@@ -5,3 +5,6 @@
 *.yml text eol=lf
 *.md text eol=lf
 *.txt text eol=lf
+*.go text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
