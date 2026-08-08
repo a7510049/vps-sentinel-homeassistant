@@ -32,6 +32,9 @@ jobs:
           node --check home-assistant/www/vps-sentinel-apple-card.js &&
           node --check home-assistant/www/vps-sentinel-fleet-card.js
 
+      - name: Run Fleet Card runtime contract
+        run: node tests/fleet_card_runtime.mjs
+
       - name: Check Blueprint YAML syntax
         run: ruby -e "require 'yaml'; Dir['home-assistant/blueprints/*.yaml'].each { |file| YAML.parse_file(file) }"
 
